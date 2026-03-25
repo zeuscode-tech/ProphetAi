@@ -1,108 +1,110 @@
 """
-Pricing Service — XGBoost-based fair-market value prediction for ProphetAI.
+Pricing Service — fair-market value estimation for ProphetAI (Kyrgyzstan market).
 
-In production, this service would load a pre-trained XGBoost model from disk.
-The placeholder implementation uses a simple heuristic model so the API remains
-functional even without a trained model artifact.
+Uses a heuristic model calibrated to KG real estate prices (in USD).
+If a trained XGBoost model artifact is found, it takes priority.
 """
 
 from __future__ import annotations
 
 import logging
-import math
 import os
+import random
 from typing import Any
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Path where the trained model pickle is expected
 _MODEL_PATH = os.path.join(os.path.dirname(__file__), "model_artifacts", "xgb_model.pkl")
+
+# ── KG market price benchmarks (USD per sqm) ─────────────────────────────────
+# Source: house.kg average 2023-2024
+_CITY_PRICE_PER_SQM: dict[str, float] = {
+    # Bishkek districts
+    "бишкек": 900,
+    "bishkek": 900,
+    "bishkek центр": 1300,
+    "аламедин": 750,
+    "асанбай": 820,
+    "джал": 870,
+    "восток-5": 780,
+    "южные магистрали": 810,
+    "ак-орго": 760,
+    "кара-жыгач": 700,
+    # Other cities
+    "ош": 500,
+    "osh": 500,
+    "жалал-абад": 380,
+    "jalal-abad": 380,
+    "каракол": 350,
+    "токмок": 320,
+    "кант": 310,
+    "чуй": 600,
+    "чуйская": 600,
+}
+_DEFAULT_PRICE_PER_SQM = 700  # fallback if city unknown
+
+# Condition multipliers
+_CONDITION_MULTIPLIERS = {
+    "новостройка": 1.20,
+    "евроремонт": 1.15,
+    "хорошее": 1.00,
+    "среднее": 0.87,
+    "требует ремонта": 0.70,
+}
 
 
 class PricingService:
-    """
-    Estimates fair-market value and computes investment metrics.
-
-    If a trained XGBoost model artifact is found at ``_MODEL_PATH``, it will
-    be used for prediction.  Otherwise, a transparent heuristic baseline is
-    applied so that the service always returns a sensible result.
-    """
 
     def __init__(self) -> None:
         self._model = self._load_model()
-
-    # ──────────────────────────────────────────────
-    # Public interface
-    # ──────────────────────────────────────────────
 
     def predict(
         self,
         bedrooms: int | None,
         bathrooms: float | None,
-        square_feet: int | None,
+        square_feet: int | None,  # actually sqm in KG context
         lot_size_sqft: int | None = None,
         year_built: int | None = None,
         city: str = "",
         state: str = "",
         zip_code: str = "",
+        condition: str = "",
     ) -> dict[str, Any]:
-        """
-        Return a pricing analysis dictionary with keys:
-        - estimated_price (float)
-        - investment_score (float, 0–100)
-        - rental_yield_pct (float)
-        - appreciation_trend_pct (float)
-        - comparable_sales (list of dicts)
-        - confidence_interval (dict with "low" and "high")
-        """
         estimated_price = self._estimate_price(
             bedrooms=bedrooms,
             bathrooms=bathrooms,
             square_feet=square_feet,
             lot_size_sqft=lot_size_sqft,
             year_built=year_built,
+            city=city,
+            condition=condition,
         )
-
-        investment_score = self._compute_investment_score(
-            estimated_price=estimated_price,
-            year_built=year_built,
-            square_feet=square_feet,
-        )
-
-        rental_yield = self._estimate_rental_yield(estimated_price)
-        appreciation = self._estimate_appreciation(state=state, zip_code=zip_code)
-        comparables = self._generate_comparables(estimated_price, bedrooms, square_feet)
-        ci = self._confidence_interval(estimated_price)
-
         return {
             "estimated_price": round(estimated_price, 2),
-            "investment_score": round(investment_score, 2),
-            "rental_yield_pct": round(rental_yield, 2),
-            "appreciation_trend_pct": round(appreciation, 2),
-            "comparable_sales": comparables,
-            "confidence_interval": ci,
+            "investment_score": round(self._investment_score(estimated_price, year_built, square_feet), 2),
+            "rental_yield_pct": round(self._rental_yield(estimated_price), 2),
+            "appreciation_trend_pct": round(self._appreciation(city, state), 2),
+            "comparable_sales": self._comparables(estimated_price, bedrooms, square_feet, city),
+            "confidence_interval": {
+                "low": round(estimated_price * 0.88, 2),
+                "high": round(estimated_price * 1.12, 2),
+            },
         }
 
-    # ──────────────────────────────────────────────
-    # Private helpers
-    # ──────────────────────────────────────────────
+    # ── Private ───────────────────────────────────────────────────────────────
 
     @staticmethod
     def _load_model() -> Any | None:
-        """Attempt to load a pickled XGBoost model from disk."""
         if not os.path.exists(_MODEL_PATH):
-            logger.info("No trained model found at %s; using heuristic baseline.", _MODEL_PATH)
+            logger.info("No trained model at %s; using KG heuristic.", _MODEL_PATH)
             return None
         try:
             import pickle
-
             with open(_MODEL_PATH, "rb") as f:
-                model = pickle.load(f)
-            logger.info("Loaded XGBoost model from %s.", _MODEL_PATH)
-            return model
-        except Exception as exc:  # noqa: BLE001
+                return pickle.load(f)
+        except Exception as exc:
             logger.warning("Failed to load model: %s", exc)
             return None
 
@@ -113,144 +115,135 @@ class PricingService:
         square_feet: int | None,
         lot_size_sqft: int | None,
         year_built: int | None,
+        city: str,
+        condition: str,
     ) -> float:
-        """Estimate fair-market value using a trained model or heuristic fallback."""
         if self._model is not None:
-            return self._predict_with_model(
-                bedrooms=bedrooms,
-                bathrooms=bathrooms,
-                square_feet=square_feet,
-                lot_size_sqft=lot_size_sqft,
-                year_built=year_built,
-            )
-        return self._heuristic_estimate(
-            bedrooms=bedrooms,
-            bathrooms=bathrooms,
-            square_feet=square_feet,
-            lot_size_sqft=lot_size_sqft,
-            year_built=year_built,
-        )
+            return self._predict_with_model(bedrooms, bathrooms, square_feet, lot_size_sqft, year_built)
+        return self._heuristic_kg(bedrooms, square_feet, lot_size_sqft, year_built, city, condition)
 
-    def _predict_with_model(
-        self,
-        bedrooms: int | None,
-        bathrooms: float | None,
-        square_feet: int | None,
-        lot_size_sqft: int | None,
-        year_built: int | None,
-    ) -> float:
-        """Run inference through the XGBoost model."""
-        features = np.array(
-            [[
-                bedrooms or 3,
-                bathrooms or 2.0,
-                square_feet or 1500,
-                lot_size_sqft or 5000,
-                year_built or 2000,
-            ]],
-            dtype=np.float32,
-        )
+    def _predict_with_model(self, bedrooms, bathrooms, square_feet, lot_size_sqft, year_built) -> float:
+        features = np.array([[
+            bedrooms or 2,
+            bathrooms or 1.0,
+            square_feet or 50,
+            lot_size_sqft or 0,
+            year_built or 2000,
+        ]], dtype=np.float32)
         return float(self._model.predict(features)[0])
 
     @staticmethod
-    def _heuristic_estimate(
+    def _heuristic_kg(
         bedrooms: int | None,
-        bathrooms: float | None,
         square_feet: int | None,
         lot_size_sqft: int | None,
         year_built: int | None,
+        city: str,
+        condition: str,
     ) -> float:
-        """
-        Simple but transparent heuristic using US national averages:
-        ~$175/sqft base, adjusted for age, lot, bedrooms, and bathrooms.
-        """
-        sqft = square_feet or 1500
-        beds = bedrooms or 3
-        baths = bathrooms or 2.0
-        lot = lot_size_sqft or 5000
-        age = max(0, 2024 - (year_built or 2000))
+        sqm = square_feet or (bedrooms or 2) * 25 + 20  # fallback if no area
+        city_key = city.lower().strip()
 
-        base = sqft * 175.0
-        bed_bonus = beds * 8_000
-        bath_bonus = baths * 6_000
-        lot_bonus = min(lot, 43560) * 0.80  # Cap at 1 acre; $0.80/sqft
-        age_discount = min(age * 500, 50_000)  # Up to $50k discount for age
+        # Find price per sqm for city/district
+        price_per_sqm = _DEFAULT_PRICE_PER_SQM
+        for key, val in _CITY_PRICE_PER_SQM.items():
+            if key in city_key or city_key in key:
+                price_per_sqm = val
+                break
 
-        return max(base + bed_bonus + bath_bonus + lot_bonus - age_discount, 50_000)
+        base = sqm * price_per_sqm
 
-    @staticmethod
-    def _compute_investment_score(
-        estimated_price: float,
-        year_built: int | None,
-        square_feet: int | None,
-    ) -> float:
-        """Composite 0–100 investment score (higher = better opportunity)."""
-        score = 50.0  # Neutral baseline
+        # Condition adjustment
+        cond_key = condition.lower().strip() if condition else ""
+        for key, mult in _CONDITION_MULTIPLIERS.items():
+            if key in cond_key:
+                base *= mult
+                break
 
-        # Price-per-sqft efficiency (lower is better for buyer)
-        if square_feet and square_feet > 0:
-            price_per_sqft = estimated_price / square_feet
-            if price_per_sqft < 100:
-                score += 20
-            elif price_per_sqft < 175:
-                score += 10
-            elif price_per_sqft > 350:
-                score -= 10
-
-        # Newer homes get bonus; very old homes get penalty
+        # Age adjustment (Soviet-era buildings ~1960-1990 get discount)
         if year_built:
             age = 2024 - year_built
-            if age < 10:
-                score += 10
-            elif age < 30:
-                score += 5
-            elif age > 50:
-                score -= 5
+            if age > 40:
+                base *= 0.85
+            elif age > 20:
+                base *= 0.93
+            elif age < 5:
+                base *= 1.10  # new construction premium
 
+        # Land bonus (for houses/cottages)
+        if lot_size_sqft and lot_size_sqft > 100:
+            base += min(lot_size_sqft, 1000) * 15  # ~$15/sqm land
+
+        return max(base, 5_000)
+
+    @staticmethod
+    def _investment_score(estimated_price: float, year_built: int | None, square_feet: int | None) -> float:
+        score = 50.0
+        if square_feet and square_feet > 0:
+            ppm = estimated_price / square_feet  # price per sqm
+            if ppm < 500:
+                score += 20
+            elif ppm < 800:
+                score += 10
+            elif ppm > 1200:
+                score -= 10
+        if year_built:
+            age = 2024 - year_built
+            if age < 5:
+                score += 15
+            elif age < 15:
+                score += 8
+            elif age > 45:
+                score -= 10
         return max(0.0, min(100.0, score))
 
     @staticmethod
-    def _estimate_rental_yield(estimated_price: float) -> float:
-        """Rough gross rental yield estimate (~6% national average)."""
+    def _rental_yield(estimated_price: float) -> float:
+        """Bishkek gross rental yield ~7-9% annually."""
         if estimated_price <= 0:
             return 0.0
-        monthly_rent_estimate = estimated_price * 0.006  # 0.6% monthly gross rule
-        annual_rent = monthly_rent_estimate * 12
-        return (annual_rent / estimated_price) * 100
+        monthly_rent = estimated_price * 0.0065  # ~0.65% monthly
+        return (monthly_rent * 12 / estimated_price) * 100
 
     @staticmethod
-    def _estimate_appreciation(state: str, zip_code: str) -> float:
-        """Placeholder annual appreciation estimate (national ~4% avg)."""
-        # In production: query a real appreciation API or historical DB
-        return 4.2
+    def _appreciation(city: str, state: str) -> float:
+        """Annual appreciation estimate. Bishkek ~8-12%, regions ~3-5%."""
+        city_lower = city.lower()
+        if "бишкек" in city_lower or "bishkek" in city_lower:
+            return 9.5
+        if "ош" in city_lower or "osh" in city_lower:
+            return 5.0
+        return 4.0
 
     @staticmethod
-    def _generate_comparables(
-        estimated_price: float, bedrooms: int | None, square_feet: int | None
+    def _comparables(
+        estimated_price: float,
+        bedrooms: int | None,
+        square_feet: int | None,
+        city: str,
     ) -> list[dict[str, Any]]:
-        """Generate synthetic comparable sales entries for UI demonstration."""
-        import random
-
+        """Generate synthetic comparable sales based on city context."""
         rng = random.Random(int(estimated_price) % 9999)
-        beds = bedrooms or 3
-        sqft = square_feet or 1500
+        beds = bedrooms or 2
+        sqm = square_feet or 55
+
+        # KG street name samples per city
+        if "бишкек" in city.lower() or "bishkek" in city.lower():
+            streets = ["ул. Манаса", "ул. Чуй", "мкр Аламедин", "мкр Джал", "ул. Байтик Баатыра",
+                       "мкр Асанбай", "ул. Токомбаева", "мкр Восток-5"]
+        elif "ош" in city.lower():
+            streets = ["ул. Ленина", "ул. Курманжан Датки", "мкр Он-Адыр", "ул. Масалиева"]
+        else:
+            streets = ["ул. Ленина", "ул. Советская", "ул. Центральная", "ул. Мира"]
+
         comps = []
         for i in range(5):
-            spread = rng.uniform(-0.12, 0.12)
+            spread = rng.uniform(-0.13, 0.13)
             comps.append({
-                "address": f"{rng.randint(100, 9999)} Sample St #{i + 1}",
+                "address": f"{rng.choice(streets)}, {rng.randint(1, 150)}",
                 "sale_price": round(estimated_price * (1 + spread), -2),
-                "bedrooms": beds + rng.randint(-1, 1),
-                "square_feet": sqft + rng.randint(-200, 200),
-                "days_ago": rng.randint(14, 180),
+                "bedrooms": max(1, beds + rng.randint(-1, 1)),
+                "square_feet": sqm + rng.randint(-10, 10),
+                "days_ago": rng.randint(7, 120),
             })
         return comps
-
-    @staticmethod
-    def _confidence_interval(estimated_price: float) -> dict[str, float]:
-        """±12% confidence interval around the estimate."""
-        margin = estimated_price * 0.12
-        return {
-            "low": round(estimated_price - margin, 2),
-            "high": round(estimated_price + margin, 2),
-        }

@@ -82,6 +82,7 @@ class AnalysePropertyView(APIView):
                 city=prop.city,
                 state=prop.state,
                 zip_code=prop.zip_code,
+                condition=gemini_result.get("condition", ""),
             )
 
             prop.ai_estimated_price = pricing_result.get("estimated_price")
