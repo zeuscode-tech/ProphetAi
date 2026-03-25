@@ -1,0 +1,2 @@
+# ProphetAi
+Our Hackathon project
