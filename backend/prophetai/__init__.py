@@ -1,0 +1,3 @@
+"""
+ProphetAI Django project package.
+"""

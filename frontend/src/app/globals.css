@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+:root {
+  --foreground-rgb: 241, 245, 249;
+  --background-start-rgb: 2, 6, 23;
+  --background-end-rgb: 2, 6, 23;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-start-rgb));
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Animated gradient border utility */
+@layer utilities {
+  .gradient-border {
+    background: linear-gradient(#0f172a, #0f172a) padding-box,
+      linear-gradient(135deg, #0ea5e9, #6366f1) border-box;
+    border: 1px solid transparent;
+  }
+}
