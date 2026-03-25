@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "ProphetAI — AI-powered real estate analytics backend"
 requires-python = ">=3.11"
 dependencies = [
-    "django==4.2.9",
+    "django==4.2.26",
     "djangorestframework==3.14.0",
     "django-cors-headers==4.3.1",
     "google-generativeai==0.4.0",
@@ -17,12 +17,12 @@ dependencies = [
     "xgboost==2.0.3",
     "psycopg2-binary==2.9.9",
     "python-dotenv==1.0.0",
-    "Pillow==10.2.0",
+    "Pillow==10.3.0",
     "requests==2.31.0",
     "redis==5.0.1",
     "django-redis==5.4.0",
     "celery==5.3.6",
-    "gunicorn==21.2.0",
+    "gunicorn==23.0.0",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +30,7 @@ dev = [
     "pytest==7.4.4",
     "pytest-django==4.7.0",
     "factory-boy==3.3.0",
-    "black==24.1.1",
+    "black==26.3.1",
     "ruff==0.1.14",
 ]
 
