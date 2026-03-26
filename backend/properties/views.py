@@ -1,5 +1,6 @@
 """API views for the properties app."""
 
+import logging
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -15,23 +16,23 @@ from .serializers import (
     PropertyListSerializer,
 )
 
+# Настраиваем логгер, чтобы видеть ошибки в терминале (важно для отладки VPN)
+logger = logging.getLogger(__name__)
 
 class PropertyListView(generics.ListAPIView):
-    """GET /api/properties/ — dashboard list of all analysed properties."""
-
-    queryset = Property.objects.all()
+    """GET /api/properties/ — список всех проанализированных объектов."""
+    queryset = Property.objects.all().order_by('-created_at')
     serializer_class = PropertyListSerializer
 
 
 class PropertyDetailView(generics.RetrieveAPIView):
-    """GET /api/properties/<pk>/ — full analysis detail for one property."""
-
+    """GET /api/properties/<pk>/ — полная информация по одному объекту."""
     queryset = Property.objects.prefetch_related("photos")
     serializer_class = PropertyDetailSerializer
 
 
 class AnalysePropertyView(APIView):
-    """POST /api/analyse/ — submit a listing URL for AI analysis."""
+    """POST /api/analyse/ — отправка URL для AI анализа."""
 
     def post(self, request):
         serializer = AnalyseURLSerializer(data=request.data)
@@ -39,27 +40,25 @@ class AnalysePropertyView(APIView):
 
         listing_url = serializer.validated_data["listing_url"]
 
-        # Return existing record if already analysed
-        existing = Property.objects.filter(listing_url=listing_url).first()
-        if existing and existing.status == Property.StatusChoices.COMPLETED:
-            return Response(
-                PropertyDetailSerializer(existing).data, status=status.HTTP_200_OK
-            )
-
-        # Create or reset the property record
+        # 1. Создаем запись или сбрасываем старую для повторного анализа
         prop, _ = Property.objects.get_or_create(listing_url=listing_url)
         prop.status = Property.StatusChoices.PROCESSING
         prop.save(update_fields=["status"])
 
         try:
-            # 1. Gemini: analyse listing page and photos
+            # 2. Вызов GeminiService
             gemini_svc = GeminiService()
             gemini_result = gemini_svc.analyse_listing(listing_url)
 
-            # Persist extracted fields
+            # Проверка на пустой ответ (если VPN подвел или API недоступно)
+            if not gemini_result or "error" in gemini_result:
+                error_msg = gemini_result.get("error", "Unknown API error")
+                raise ValueError(f"Gemini error: {error_msg}")
+
+            # Безопасно сохраняем данные от нейросети через .get()
             prop.address = gemini_result.get("address", "")
-            prop.city = gemini_result.get("city", "")
-            prop.state = gemini_result.get("state", "")
+            prop.city = gemini_result.get("city", "Бишкек")
+            prop.state = gemini_result.get("state", "Чуйская область")
             prop.zip_code = gemini_result.get("zip_code", "")
             prop.bedrooms = gemini_result.get("bedrooms")
             prop.bathrooms = gemini_result.get("bathrooms")
@@ -71,35 +70,44 @@ class AnalysePropertyView(APIView):
             prop.photo_insights = gemini_result.get("photo_insights", [])
             prop.gemini_raw_response = gemini_result
 
-            # 2. Pricing model: estimate fair-market value
-            pricing_svc = PricingService()
-            pricing_result = pricing_svc.predict(
-                bedrooms=prop.bedrooms,
-                bathrooms=float(prop.bathrooms) if prop.bathrooms else None,
-                square_feet=prop.square_feet,
-                lot_size_sqft=prop.lot_size_sqft,
-                year_built=prop.year_built,
-                city=prop.city,
-                state=prop.state,
-                zip_code=prop.zip_code,
-                condition=gemini_result.get("condition", ""),
-            )
+            # 3. Вызов PricingService (оборачиваем отдельно, чтобы не падал весь процесс)
+            try:
+                pricing_svc = PricingService()
+                pricing_result = pricing_svc.predict(
+                    bedrooms=prop.bedrooms,
+                    bathrooms=float(prop.bathrooms) if prop.bathrooms else None,
+                    square_feet=prop.square_feet,
+                    lot_size_sqft=prop.lot_size_sqft,
+                    year_built=prop.year_built,
+                    city=prop.city,
+                    state=prop.state,
+                    zip_code=prop.zip_code,
+                    condition=gemini_result.get("condition", ""),
+                )
 
-            prop.ai_estimated_price = pricing_result.get("estimated_price")
-            prop.investment_score = pricing_result.get("investment_score")
-            prop.rental_yield_pct = pricing_result.get("rental_yield_pct")
-            prop.appreciation_trend_pct = pricing_result.get("appreciation_trend_pct")
-            prop.comparable_sales = pricing_result.get("comparable_sales", [])
+                prop.ai_estimated_price = pricing_result.get("estimated_price")
+                prop.investment_score = pricing_result.get("investment_score")
+                prop.rental_yield_pct = pricing_result.get("rental_yield_pct")
+                prop.appreciation_trend_pct = pricing_result.get("appreciation_trend_pct")
+                prop.comparable_sales = pricing_result.get("comparable_sales", [])
+            except Exception as pricing_err:
+                logger.warning(f"Ошибка в PricingService: {str(pricing_err)}")
+                # Если математика не сработала, оставляем поля пустыми, но анализ Gemini сохраняем
 
             prop.status = Property.StatusChoices.COMPLETED
             prop.analysed_at = timezone.now()
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            # Логируем ошибку, чтобы ты видел её в терминале
+            logger.error(f"Критическая ошибка анализа: {str(exc)}")
             prop.status = Property.StatusChoices.FAILED
+            # Сохраняем текст ошибки в базу для просмотра через админку
             prop.gemini_raw_response = {"error": str(exc)}
 
+        # Финальное сохранение
         prop.save()
 
+        # Формируем ответ
         response_status = (
             status.HTTP_200_OK
             if prop.status == Property.StatusChoices.COMPLETED

@@ -14,7 +14,7 @@
     "react-dom": "^19",
     "recharts": "^2.10.4",
     "clsx": "^2.1.0",
-    "lucide-react": "^0.323.0"
+    "lucide-react": "^1.6.0"
   },
   "devDependencies": {
     "typescript": "^5",

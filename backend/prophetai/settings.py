@@ -11,6 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load .env from the backend directory
 load_dotenv(BASE_DIR / ".env")
+print(f"DEBUG CHECK: Gemini Key is {'SET' if os.getenv('GEMINI_API_KEY') else 'NOT SET'}")
 
 # ──────────────────────────────────────────────
 # Security
@@ -134,12 +135,10 @@ REST_FRAMEWORK = {
 # ──────────────────────────────────────────────
 # CORS
 # ──────────────────────────────────────────────
-CORS_ALLOWED_ORIGINS = os.environ.get(
-    "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000",
-).split(",")
 
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+# CORS_REPLACE_HTTPS_REFERER = True
 
 # ──────────────────────────────────────────────
 # Auth

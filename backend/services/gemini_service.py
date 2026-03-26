@@ -72,23 +72,18 @@ Important rules:
 - For Bishkek listings: note the district (мкр Аламедин, Асанбай, Джал, Восток-5, Южные Магистрали, etc.)
 """
 
-
 class GeminiService:
-    """Wrapper around the Google Gemini 1.5 Pro multimodal API."""
-
-    _MODEL = "gemini-1.5-flash"
+    # Эти переменные внутри класса
+    _MODEL = 'gemini-2.5-flash'
     _TIMEOUT = 30
 
     def __init__(self) -> None:
+        # Внутри метода еще +4 пробела (итого 8)
         api_key = settings.GEMINI_API_KEY
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not configured.")
 
-        try:
-            import google.generativeai as genai
-        except ImportError as exc:
-            raise ImportError("google-generativeai package is not installed.") from exc
-
+        import google.generativeai as genai
         genai.configure(api_key=api_key)
         self._model = genai.GenerativeModel(self._MODEL)
 
@@ -96,16 +91,18 @@ class GeminiService:
         """
         Scrape listing → build multimodal prompt → call Gemini → return structured dict.
         """
+        # Весь этот код тоже должен быть с отступом в 8 пробелов
         scraped = scrape_listing(listing_url)
         page_text = scraped.get("page_text", "")
         photo_urls = scraped.get("photo_urls", [])
 
-        # Enrich prompt with pre-parsed fields if available
         extra_context = self._build_extra_context(scraped)
-
         prompt_parts = self._build_prompt_parts(listing_url, page_text, photo_urls, extra_context)
+        
         response_text = self._call_gemini(prompt_parts)
         return self._parse_response(response_text)
+
+    # Не забудь сдвинуть остальные методы (_call_gemini, _parse_response и т.д.) тоже!
 
     # ── Private ───────────────────────────────────────────────────────────────
 
@@ -123,6 +120,25 @@ class GeminiService:
             parts.append(f"Params: {params_str}")
         return "\n".join(parts)
 
+    def _fetch_image_as_part(self, url: str) -> dict[str, Any] | None:
+        """Скачивает изображение и готовит его для мультимодального запроса."""
+        import requests
+        import base64
+        try:
+            # House.kg может блокировать пустые User-Agent
+            headers = {"User-Agent": "Mozilla/5.0"}
+            resp = requests.get(url, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                return {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": base64.b64encode(resp.content).decode("utf-8")
+                    }
+                }
+        except Exception as e:
+            logger.warning(f"Не удалось загрузить фото для анализа: {url}. Ошибка: {e}")
+        return None
+
     def _build_prompt_parts(
         self,
         listing_url: str,
@@ -130,22 +146,50 @@ class GeminiService:
         photo_urls: list[str],
         extra_context: str,
     ) -> list[Any]:
+        # --- ОТЛАДКА: Посмотрим, сколько ссылок пришло из скрапера ---
+        print(f"DEBUG: Scraper found {len(photo_urls)} photos total.")
+        
         parts: list[Any] = [
             _LISTING_SCHEMA_PROMPT,
             f"\n\n--- LISTING URL ---\n{listing_url}\n",
         ]
+        
         if extra_context:
             parts.append(f"\n--- PRE-PARSED DATA ---\n{extra_context}\n")
+        
         parts.append(f"\n--- PAGE TEXT ---\n{page_text}\n")
 
+        # Если ссылок много, мы берем только MAX_INLINE_PHOTOS (например, 5 или 10)
         if photo_urls:
-            parts.append("\n--- PHOTO URLS (describe what you can infer from these URLs and filenames) ---\n" + "\n".join(photo_urls))
+            # Важно: берем срез [:MAX_INLINE_PHOTOS]
+            valid_photos = photo_urls[:MAX_INLINE_PHOTOS]
+            print(f"--- Processing {len(valid_photos)} photos for Gemini Vision... ---")
+            
+            for url in valid_photos:
+                img_part = self._fetch_image_as_part(url)
+                if img_part:
+                    parts.append(img_part)
+            
+            parts.append("\n[System Instruction]: Анализируй изображения выше для оценки состояния ремонта.")
 
         return parts
 
     def _call_gemini(self, prompt_parts: list[Any]) -> str:
-        response = self._model.generate_content(prompt_parts)
-        return response.text
+        try:
+            # Добавляем принт, чтобы видеть прогресс в терминале
+            print(f"--- Sending request to Gemini ({self._MODEL})... ---") 
+            response = self._model.generate_content(prompt_parts)
+            
+            if not response.text:
+                raise ValueError("Gemini returned empty response")
+                
+            print("--- Gemini responded successfully! ---")
+            return response.text
+        except Exception as e:
+            print(f"!!! CRITICAL API ERROR: {str(e)}") # Это появится в черном окне
+            logger.error(f"Gemini API Error: {str(e)}")
+            # Вместо JSON возвращаем простую ошибку, чтобы parse_response это увидел
+            raise e
 
     @staticmethod
     def _parse_response(text: str) -> dict[str, Any]:

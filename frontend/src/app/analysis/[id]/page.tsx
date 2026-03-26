@@ -152,15 +152,12 @@ export default function AnalysisPage() {
         {[
           {
             label: "Rental Yield",
-            value: property.rental_yield_pct != null ? `${property.rental_yield_pct.toFixed(1)}%` : "—",
+            value: typeof property.rental_yield_pct === 'number' ? `${property.rental_yield_pct.toFixed(1)}%` : "-",
             sub: "Estimated gross annual yield",
           },
           {
             label: "Appreciation Trend",
-            value:
-              property.appreciation_trend_pct != null
-                ? `${property.appreciation_trend_pct.toFixed(1)}%`
-                : "—",
+            value: typeof property.appreciation_trend_pct === 'number' ? `${property.appreciation_trend_pct.toFixed(1)}%` : "-",
             sub: "12-month area average",
           },
           {
