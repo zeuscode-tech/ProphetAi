@@ -18,9 +18,19 @@ export default function InvestmentScoreGauge({ score }: Props) {
     return `M ${a.x} ${a.y} A ${R} ${R} 0 ${e - s > 180 ? 1 : 0} 1 ${b.x} ${b.y}`;
   }
 
-  const color = capped >= 70 ? "#06d6a0" : capped >= 40 ? "#4cc9f0" : "#f72585";
-  const glow = capped >= 70 ? "drop-shadow(0 0 6px rgba(6,214,160,0.5))" : capped >= 40 ? "drop-shadow(0 0 6px rgba(76,201,240,0.5))" : "drop-shadow(0 0 6px rgba(247,37,133,0.5))";
-  const label = capped >= 70 ? "Strong Buy" : capped >= 40 ? "Neutral" : "Caution";
+  // 4 investment zones
+  const color = capped >= 75 ? "#06d6a0"   // green  — Рекомендуем
+              : capped >= 50 ? "#fbbf24"    // yellow — Нейтрально
+              : capped >= 25 ? "#f97316"    // orange — Зона риска
+              : "#f72585";                  // red    — Осторожно
+  const glow  = capped >= 75 ? "drop-shadow(0 0 6px rgba(6,214,160,0.5))"
+              : capped >= 50 ? "drop-shadow(0 0 6px rgba(251,191,36,0.5))"
+              : capped >= 25 ? "drop-shadow(0 0 6px rgba(249,115,22,0.5))"
+              : "drop-shadow(0 0 6px rgba(247,37,133,0.5))";
+  const label = capped >= 75 ? "Рекомендуем"
+              : capped >= 50 ? "Нейтрально"
+              : capped >= 25 ? "Зона риска"
+              : "Осторожно";
 
   return (
     <div className="flex flex-col items-center">

@@ -40,8 +40,8 @@ Return ONLY a valid JSON object. No markdown, no explanations outside the JSON.
   "listing_price": <price in USD — convert from KGS if needed: 1 USD ≈ 89 KGS>,
   "property_type": "<Квартира | Дом | Коттедж | Участок | Коммерческая | Другое>",
   "condition": "<Новостройка | Евроремонт | Хорошее | Среднее | Требует ремонта>",
-  "description_summary": "<2-3 sentence summary in Russian>",
-  "neighbourhood_notes": "<district, infrastructure, transport access>",
+  "description_summary": "<краткое описание 2-3 предложения на РУССКОМ языке>",
+  "neighbourhood_notes": "<район, инфраструктура, транспорт — на РУССКОМ языке>",
   "valuation": {
     "estimated_price": <fair market price in USD based on district + condition, NOT seller price>,
     "confidence_score": <0.0–1.0>,
@@ -54,9 +54,9 @@ Return ONLY a valid JSON object. No markdown, no explanations outside the JSON.
     "features": ["<key feature from photos>"],
     "red_flags": [
       {
-        "issue": "<short title>",
+        "issue": "<краткое название проблемы на РУССКОМ>",
         "severity": "<high | medium | low>",
-        "description": "<why this is a risk>"
+        "description": "<объяснение риска на РУССКОМ языке>"
       }
     ]
   },
@@ -65,22 +65,32 @@ Return ONLY a valid JSON object. No markdown, no explanations outside the JSON.
     "rental_yield_est": "<percentage string, e.g. '7.5%'>",
     "liquidity": "<high | medium | low>"
   },
-  "photo_captions": [
+  "photo_insights": [
     {
-      "image_index": <0-based index>,
-      "label": "<room label in English>",
-      "detected_items": ["<item1>", "<item2>"]
+      "room_type": "<название комнаты на РУССКОМ: Кухня | Гостиная | Спальня | Ванная | Фасад | Двор | Другое>",
+      "condition_score": <оценка состояния 1.0–10.0 на основе фото>,
+      "observations": ["<конкретное наблюдение 1 на русском>", "<наблюдение 2>"],
+      "renovation_needed": <true если нужен ремонт, иначе false>,
+      "estimated_reno_cost_usd": <примерная стоимость ремонта в USD или null>
     }
   ]
 }
 
+ПРАВИЛА ДЛЯ photo_insights:
+- Анализируй только предоставленные фотографии. Для каждого уникального типа комнаты — ОДНА запись.
+- НЕ дублируй room_type. Если 3 спальни — сделай одну запись "Спальня" с усреднённой оценкой.
+- Если фото нет или тип комнаты неизвестен — используй "Общий вид".
+- observations должны быть конкретными (пример: "Свежая плитка", "Старая сантехника") — не общими фразами.
+- Минимум 2 observations на каждую запись.
+
 STRICT RULES:
-1. If year_built is in the future (2025/2026+), add a high-severity red_flag: "Under Construction / Data Error".
-2. If description says "Luxury" / "Евроремонт" but photos show old furniture or poor finishes, add High severity red_flag: "Описание не соответствует фото".
+1. If year_built is 2025 or later AND the listing condition is NOT "Новостройка"/"новостройка" AND the listing does NOT explicitly say it is completed/сдан — then add a high-severity red_flag: "Under Construction / Data Error". If condition IS "Новостройка" or listing says it is a new development, do NOT add this flag just for the year alone.
+2. If description says "Luxury" / "Евроремонт" but photos show old furniture or poor finishes, add High severity red_flag: "Описание не соответствует фото". Only add this flag if you actually see the photos — do not add it based on text alone.
 3. estimated_price must be calculated from district benchmarks + condition multiplier, not just the seller's price.
 4. listing_price always in USD (convert KGS → USD at 1:89).
 5. square_feet is sqm (post-Soviet standard), not square feet.
 6. If a value cannot be determined, use null.
+7. IMPORTANT: Do NOT add a "no photos" red flag if the metadata says the listing has photos. Only flag absent photos if LISTING_PHOTO_COUNT = 0.
 """
 
 class GeminiService:
@@ -101,15 +111,17 @@ class GeminiService:
     def analyse_listing(self, listing_url: str) -> dict[str, Any]:
         """
         Scrape listing → build multimodal prompt → call Gemini → return structured dict.
+        Scraped raw data is stored on self.last_scraped for the caller to access.
         """
-        # Весь этот код тоже должен быть с отступом в 8 пробелов
         scraped = scrape_listing(listing_url)
+        self.last_scraped = scraped  # expose to caller (views.py)
+
         page_text = scraped.get("page_text", "")
         photo_urls = scraped.get("photo_urls", [])
 
         extra_context = self._build_extra_context(scraped)
         prompt_parts = self._build_prompt_parts(listing_url, page_text, photo_urls, extra_context)
-        
+
         response_text = self._call_gemini(prompt_parts)
         return self._parse_response(response_text)
 
@@ -129,6 +141,11 @@ class GeminiService:
         if scraped.get("params"):
             params_str = ", ".join(f"{k}: {v}" for k, v in scraped["params"].items())
             parts.append(f"Params: {params_str}")
+        # Tell Gemini how many photos the listing actually has on the website.
+        # This prevents it from generating a "no photos" flag when photos exist
+        # but couldn't be downloaded for analysis.
+        photo_count = scraped.get("photo_count", len(scraped.get("photo_urls", [])))
+        parts.append(f"LISTING_PHOTO_COUNT: {photo_count}")
         return "\n".join(parts)
 
     def _fetch_image_as_part(self, url: str) -> dict[str, Any] | None:

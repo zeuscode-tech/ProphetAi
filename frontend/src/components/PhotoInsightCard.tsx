@@ -19,7 +19,7 @@ export default function PhotoInsightCard({ insight, onPhotoClick }: Props) {
       )}
       <div className="p-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold text-white">{insight.room_type || "Room"}</span>
+          <span className="text-sm font-semibold text-white">{insight.room_type || "Комната"}</span>
           <span className="text-xs text-slate-400">{score.toFixed(1)}/10</span>
         </div>
         <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-surface-200">
@@ -35,7 +35,7 @@ export default function PhotoInsightCard({ insight, onPhotoClick }: Props) {
         {insight.renovation_needed && (
           <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs text-amber-400">
             <Wrench className="h-3.5 w-3.5 shrink-0" />
-            Renovation needed{insight.estimated_reno_cost_usd != null && (
+            Требует ремонта{insight.estimated_reno_cost_usd != null && (
               <span className="font-semibold ml-0.5">~{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(insight.estimated_reno_cost_usd)}</span>
             )}
           </div>

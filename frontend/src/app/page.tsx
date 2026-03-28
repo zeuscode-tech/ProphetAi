@@ -20,7 +20,7 @@ export default function LandingPage() {
       const result = await analyseProperty(url.trim());
       router.push(`/analysis/${result.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(err instanceof Error ? err.message : "Что-то пошло не так.");
     } finally {
       setLoading(false);
     }
@@ -35,18 +35,18 @@ export default function LandingPage() {
       <div className="animate-fade-in mb-6">
         <div className="glass inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm text-slate-400">
           <Sparkles className="h-3.5 w-3.5 text-neon-cyan" />
-          AI-Powered Property Intelligence
+          Аналитика недвижимости на базе ИИ
         </div>
       </div>
 
       <div className="animate-slide-up mb-10 max-w-3xl text-center">
         <h1 className="text-5xl font-black tracking-tight text-white sm:text-7xl leading-[1.1]">
-          Know what a property{" "}
-          <span className="text-gradient">is really worth</span>
+          Узнайте реальную{" "}
+          <span className="text-gradient">стоимость объекта</span>
         </h1>
         <p className="mt-6 text-lg text-slate-400 leading-relaxed max-w-xl mx-auto">
-          Paste any listing URL. Get an instant valuation, investment score,
-          and AI photo analysis with red flag detection.
+          Вставьте ссылку на любое объявление. Получите мгновенную оценку стоимости,
+          инвестиционный рейтинг и ИИ-анализ фотографий с выявлением проблем.
         </p>
       </div>
 
@@ -57,7 +57,7 @@ export default function LandingPage() {
             type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="Paste listing URL (zillow.com, redfin.com...)"
+            placeholder="Вставьте ссылку на объявление (zillow.com, redfin.com...)"
             required
             className="w-full rounded-xl border border-glass-border-light bg-surface-50 py-4 pl-11 pr-4 text-white placeholder-slate-500 outline-none transition-all focus:border-neon-cyan/50 focus:shadow-glow focus:bg-surface-100"
           />
@@ -73,10 +73,10 @@ export default function LandingPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Analysing...
+              Анализирую...
             </>
           ) : (
-            <>Analyse <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>
+            <>Анализировать <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>
           )}
         </button>
       </form>
@@ -87,9 +87,9 @@ export default function LandingPage() {
 
       <div className="mt-24 grid w-full gap-5 sm:grid-cols-3">
         {[
-          { icon: TrendingUp, title: "Fair Market Value", desc: "AI estimates fair-market price with confidence intervals based on comparable sales data.", color: "text-neon-cyan", glow: "group-hover:shadow-glow" },
-          { icon: BarChart3, title: "Investment Score", desc: "0\u2013100 score with rental yield, appreciation trends, and neighbourhood comparables.", color: "text-neon-purple", glow: "group-hover:shadow-glow-purple" },
-          { icon: Shield, title: "Condition Report", desc: "Photo analysis detects structural issues, water damage, and estimates renovation costs.", color: "text-neon-blue", glow: "group-hover:shadow-glow-blue" },
+          { icon: TrendingUp, title: "Рыночная стоимость", desc: "ИИ определяет справедливую рыночную цену с доверительными интервалами на основе данных о сопоставимых продажах.", color: "text-neon-cyan", glow: "group-hover:shadow-glow" },
+          { icon: BarChart3, title: "Инвест. рейтинг", desc: "Оценка 0–100 с учётом арендной доходности, тенденций роста стоимости и сравнений по району.", color: "text-neon-purple", glow: "group-hover:shadow-glow-purple" },
+          { icon: Shield, title: "Отчёт о состоянии", desc: "Анализ фотографий выявляет конструктивные дефекты, следы протечек и оценивает стоимость ремонта.", color: "text-neon-blue", glow: "group-hover:shadow-glow-blue" },
         ].map((f, i) => (
           <div key={f.title} className={`group glass-hover rounded-2xl p-6 ${f.glow} animate-slide-up cursor-default`} style={{ animationDelay: `${0.2 + i * 0.1}s` }}>
             <div className={`mb-4 ${f.color}`}><f.icon className="h-6 w-6" /></div>

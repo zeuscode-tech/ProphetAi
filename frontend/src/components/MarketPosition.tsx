@@ -46,28 +46,76 @@ export default function MarketPosition({ property, comparables }: Props) {
   const sorted = [...comparables].sort((a, b) => a.days_ago - b.days_ago);
   const maxCompPrice = Math.max(...comparables.map((c) => c.sale_price));
 
-  // Determine if property is a deal
-  const dealDiff = est && list ? ((est - list) / list) * 100 : null;
+  // Overprice % from market: positive = overpriced, negative = underpriced
+  // Using same formula as backend: (listing - estimate) / estimate * 100
+  const dealDiff = est && list ? ((list - est) / est) * 100 : null;
 
   return (
     <div className="space-y-6">
-      {/* Deal indicator */}
-      {dealDiff !== null && (
-        <div className={`flex items-center gap-3 rounded-xl p-3 text-sm font-medium ${
-          dealDiff > 5 ? "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20" :
-          dealDiff < -5 ? "bg-neon-pink/10 text-neon-pink border border-neon-pink/20" :
-          "bg-neon-blue/10 text-neon-blue border border-neon-blue/20"
-        }`}>
-          <DollarSign className="h-4 w-4 shrink-0" />
-          {dealDiff > 5 ? `Potential deal — estimated ${dealDiff.toFixed(1)}% above listing` :
-           dealDiff < -5 ? `Overpriced — listed ${Math.abs(dealDiff).toFixed(1)}% above estimate` :
-           "Fairly priced — within 5% of estimated value"}
-        </div>
-      )}
+      {/* Deal indicator + price/m² comparison */}
+      <div className="space-y-2">
+        {dealDiff !== null && (
+          <div className={`flex items-center gap-3 rounded-xl p-3 text-sm font-medium ${
+            dealDiff > 15 ? "bg-neon-pink/10 text-neon-pink border border-neon-pink/20" :
+            dealDiff > 5  ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
+            dealDiff < -5 ? "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20" :
+            "bg-neon-blue/10 text-neon-blue border border-neon-blue/20"
+          }`}>
+            <DollarSign className="h-4 w-4 shrink-0" />
+            {dealDiff > 5
+              ? `Переоценён — переплата ${dealDiff.toFixed(0)}% от рыночной стоимости`
+              : dealDiff < -5
+              ? `Выгодная сделка — цена на ${Math.abs(dealDiff).toFixed(0)}% ниже рыночной оценки`
+              : "Справедливая цена — в пределах 5% от рыночной оценки"}
+          </div>
+        )}
+
+        {/* Price per m² comparison banner */}
+        {propPpsf != null && (
+          <div className="rounded-xl bg-surface-200/40 border border-glass-border p-3">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Сравнение цены за м²</p>
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <p className="text-[10px] text-slate-500 mb-1">Ваш объект</p>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-base font-bold text-neon-purple">${propPpsf.toFixed(0)}</span>
+                  <span className="text-[10px] text-slate-500">/м²</span>
+                </div>
+                <div className="mt-1.5 h-2 rounded-full bg-surface-200 overflow-hidden">
+                  <div className="h-full rounded-full bg-neon-purple/60" style={{ width: "100%" }} />
+                </div>
+              </div>
+              {avgPpsf != null && (
+                <div className="flex-1">
+                  <p className="text-[10px] text-slate-500 mb-1">Медиана района</p>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-base font-bold text-neon-cyan">${avgPpsf.toFixed(0)}</span>
+                    <span className="text-[10px] text-slate-500">/м²</span>
+                  </div>
+                  <div className="mt-1.5 h-2 rounded-full bg-surface-200 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-neon-cyan/60"
+                      style={{ width: `${Math.min(100, (avgPpsf / propPpsf) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {avgPpsf != null && (
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-slate-500 mb-1">Разница</p>
+                  <span className={`text-sm font-bold ${propPpsf > avgPpsf ? "text-neon-pink" : "text-neon-cyan"}`}>
+                    {propPpsf > avgPpsf ? "+" : ""}{(((propPpsf - avgPpsf) / avgPpsf) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Price Position Scale */}
       <div>
-        <p className="text-xs text-slate-500 uppercase tracking-wider mb-4">Price Position vs Comparables</p>
+        <p className="text-xs text-slate-500 uppercase tracking-wider mb-4">Позиция цены относительно аналогов</p>
         <div className="relative pt-12 pb-2">
           {/* Scale track */}
           <div className="h-1.5 rounded-full bg-surface-200 relative">
@@ -95,7 +143,7 @@ export default function MarketPosition({ property, comparables }: Props) {
           {list && (
             <div className="absolute flex flex-col items-center" style={{ left: `${toLeft(list)}%`, top: "0", transform: "translateX(-50%)" }}>
               <span className="text-[10px] font-semibold text-neon-purple whitespace-nowrap px-1.5 py-0.5 rounded bg-neon-purple/10">
-                Listing {fmtShort(list)}
+                Объявление {fmtShort(list)}
               </span>
               <div className="w-px h-5 bg-neon-purple/50 mt-0.5" />
               <div className="w-3.5 h-3.5 rounded-full bg-neon-purple/20 border-2 border-neon-purple flex items-center justify-center mt-[-2px]">
@@ -108,7 +156,7 @@ export default function MarketPosition({ property, comparables }: Props) {
           {est && (
             <div className="absolute flex flex-col items-center" style={{ left: `${toLeft(est)}%`, top: "0", transform: "translateX(-50%)" }}>
               <span className="text-[10px] font-semibold text-neon-cyan whitespace-nowrap px-1.5 py-0.5 rounded bg-neon-cyan/10">
-                Estimate {fmtShort(est)}
+                Оценка {fmtShort(est)}
               </span>
               <div className="w-px h-5 bg-neon-cyan/50 mt-0.5" />
               <div className="w-3.5 h-3.5 rounded-full bg-neon-cyan/20 border-2 border-neon-cyan flex items-center justify-center mt-[-2px]">
@@ -128,22 +176,22 @@ export default function MarketPosition({ property, comparables }: Props) {
       {/* Summary Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl bg-surface-200/40 border border-glass-border p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Avg Comp</p>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Ср. аналог</p>
           <p className="mt-1 text-sm font-bold text-white">{fmtUSD(avgComp)}</p>
         </div>
         <div className="rounded-xl bg-surface-200/40 border border-glass-border p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">{propPpsf ? "Your $/sqft" : "Comps"}</p>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">{propPpsf ? "Ваш $/м²" : "Аналогов"}</p>
           <p className="mt-1 text-sm font-bold text-white">{propPpsf ? `$${propPpsf.toFixed(0)}` : String(comparables.length)}</p>
         </div>
         <div className="rounded-xl bg-surface-200/40 border border-glass-border p-3 text-center">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Area $/sqft</p>
+          <p className="text-[10px] text-slate-500 uppercase tracking-wider">Р-н $/м²</p>
           <p className="mt-1 text-sm font-bold text-white">{avgPpsf ? `$${avgPpsf.toFixed(0)}` : "—"}</p>
         </div>
       </div>
 
       {/* Comp Cards */}
       <div className="space-y-2">
-        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Recent Sales Nearby</p>
+        <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Недавние продажи поблизости</p>
         {sorted.map((c, i) => {
           const ppsf = c.square_feet > 0 ? c.sale_price / c.square_feet : null;
           const barWidth = (c.sale_price / maxCompPrice) * 100;
@@ -163,10 +211,10 @@ export default function MarketPosition({ property, comparables }: Props) {
                 />
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1"><Bed className="h-3 w-3" />{c.bedrooms} bed</span>
-                <span className="flex items-center gap-1"><Ruler className="h-3 w-3" />{c.square_feet?.toLocaleString()} sqft</span>
-                {ppsf && <span className="text-slate-400">${ppsf.toFixed(0)}/sqft</span>}
-                <span className="flex items-center gap-1 ml-auto"><Clock className="h-3 w-3" />{c.days_ago}d ago</span>
+                <span className="flex items-center gap-1"><Bed className="h-3 w-3" />{c.bedrooms} спал.</span>
+                <span className="flex items-center gap-1"><Ruler className="h-3 w-3" />{c.square_feet?.toLocaleString()} м²</span>
+                {ppsf && <span className="text-slate-400">${ppsf.toFixed(0)}/м²</span>}
+                <span className="flex items-center gap-1 ml-auto"><Clock className="h-3 w-3" />{c.days_ago}д. назад</span>
               </div>
             </div>
           );
@@ -175,9 +223,9 @@ export default function MarketPosition({ property, comparables }: Props) {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs text-slate-500 pt-1">
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-neon-cyan border border-neon-cyan" />AI Estimate</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-neon-purple border border-neon-purple" />Listing</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-600 border-2 border-slate-500" />Comp Sales</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-neon-cyan border border-neon-cyan" />Оценка ИИ</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-neon-purple border border-neon-purple" />Объявление</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-600 border-2 border-slate-500" />Продажи аналогов</span>
       </div>
     </div>
   );

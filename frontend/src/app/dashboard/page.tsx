@@ -31,26 +31,26 @@ export default function DashboardPage() {
     <div className="animate-fade-in">
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Properties</h1>
-          <p className="mt-1 text-sm text-slate-500">{count} propert{count !== 1 ? "ies" : "y"} analysed</p>
+          <h1 className="text-3xl font-bold text-white">Объекты</h1>
+          <p className="mt-1 text-sm text-slate-500">{count} объектов проанализировано</p>
         </div>
         <Link href="/" className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-neon-cyan to-neon-blue px-5 py-2.5 text-sm font-semibold text-surface transition-all hover:shadow-glow cursor-pointer">
-          <Plus className="h-4 w-4" /> New Analysis
+          <Plus className="h-4 w-4" /> Новый анализ
         </Link>
       </div>
 
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         <div className="glass rounded-2xl p-5 flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neon-cyan/10 text-neon-cyan"><Home className="h-5 w-5" /></div>
-          <div><p className="text-xs text-slate-500">Total Analysed</p><p className="text-2xl font-bold text-white">{count}</p></div>
+          <div><p className="text-xs text-slate-500">Всего проанализировано</p><p className="text-2xl font-bold text-white">{count}</p></div>
         </div>
         <div className="glass rounded-2xl p-5 flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neon-purple/10 text-neon-purple"><TrendingUp className="h-5 w-5" /></div>
-          <div><p className="text-xs text-slate-500">Avg Investment Score</p><p className="text-2xl font-bold text-white">{avgScore !== null ? avgScore.toFixed(1) : "\u2014"}</p></div>
+          <div><p className="text-xs text-slate-500">Средний инв. рейтинг</p><p className="text-2xl font-bold text-white">{avgScore !== null ? avgScore.toFixed(1) : "—"}</p></div>
         </div>
         <div className="glass rounded-2xl p-5 flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neon-pink/10 text-neon-pink"><AlertTriangle className="h-5 w-5" /></div>
-          <div><p className="text-xs text-slate-500">Red Flags</p><p className="text-2xl font-bold text-white">{totalFlags}</p></div>
+          <div><p className="text-xs text-slate-500">Красные флаги</p><p className="text-2xl font-bold text-white">{totalFlags}</p></div>
         </div>
       </div>
 
@@ -63,8 +63,8 @@ export default function DashboardPage() {
       ) : properties.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-slate-500">
           <Home className="mb-4 h-12 w-12 text-slate-600" />
-          <p className="text-lg font-medium text-slate-400">No properties yet.</p>
-          <Link href="/" className="mt-4 text-neon-cyan hover:underline cursor-pointer">Analyse your first listing</Link>
+          <p className="text-lg font-medium text-slate-400">Объектов пока нет.</p>
+          <Link href="/" className="mt-4 text-neon-cyan hover:underline cursor-pointer">Проанализируйте первый объект</Link>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -74,9 +74,9 @@ export default function DashboardPage() {
 
       {totalPages > 1 && (
         <div className="mt-8 flex items-center justify-center gap-2">
-          <button disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="glass rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-white disabled:opacity-40 transition cursor-pointer">Previous</button>
+          <button disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="glass rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-white disabled:opacity-40 transition cursor-pointer">Назад</button>
           <span className="text-sm text-slate-500">{page} / {totalPages}</span>
-          <button disabled={page === totalPages} onClick={() => setPage((p) => p + 1)} className="glass rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-white disabled:opacity-40 transition cursor-pointer">Next</button>
+          <button disabled={page === totalPages} onClick={() => setPage((p) => p + 1)} className="glass rounded-lg px-4 py-2 text-sm text-slate-400 hover:text-white disabled:opacity-40 transition cursor-pointer">Вперёд</button>
         </div>
       )}
     </div>

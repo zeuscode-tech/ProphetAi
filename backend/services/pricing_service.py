@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import random
-import re
 from typing import Any
 
 import numpy as np
@@ -19,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 _MODEL_PATH = os.path.join(os.path.dirname(__file__), "model_artifacts", "xgb_model.pkl")
 
-# ── KG market price benchmarks (USD per sqm) ─────────────────────────────────
+# ── KG market price benchmarks (USD per sqm of building area) ────────────────
+# Apartment prices — base for heuristic
 _CITY_PRICE_PER_SQM: dict[str, float] = {
     "бишкек": 900,
     "bishkek": 900,
@@ -42,6 +41,32 @@ _CITY_PRICE_PER_SQM: dict[str, float] = {
     "чуйская": 600,
 }
 _DEFAULT_PRICE_PER_SQM = 700
+
+# ── Land price benchmarks (USD per sqm of land) ───────────────────────────────
+# Source: house.kg land listings 2024. 1 сотка = 100 sqm.
+# Central Bishkek (ул. Карла Маркса, Московская, Манаса, Байтик Баатыра): ~$300-500/sqm
+# Average Bishkek residential (Аламедин, Джал, Асанбай): ~$100-250/sqm
+# Bishkek suburbs / outskirts: ~$50-100/sqm
+_CITY_LAND_PRICE_PER_SQM: dict[str, float] = {
+    "бишкек": 180,       # Average residential Bishkek
+    "bishkek": 180,
+    "ош": 80,
+    "osh": 80,
+    "жалал-абад": 45,
+    "jalal-abad": 45,
+    "каракол": 40,
+    "токмок": 30,
+    "чуйская": 60,
+    "чуй": 60,
+}
+_DEFAULT_LAND_PRICE_PER_SQM = 50
+
+# Central street keywords → premium land (+80% over city average)
+_CENTRAL_STREETS = [
+    "карла маркса", "karl marks", "московская", "манаса", "manas",
+    "чуй", "chui", "байтик баатыра", "боконбаева", "токтогула",
+    "филармония", "центр", "center",
+]
 
 # ── Bishkek housing series (советские серии) ──────────────────────────────────
 # Source: house.kg analytics + local broker data 2023-2024
@@ -101,36 +126,39 @@ def calculate_investment_score(
         Score from 1.0 to 100.0. Higher = better investment.
     """
     if fair_price <= 0:
-        return 1.0
+        return 20.0
 
-    # 1. Price delta factor: how undervalued is it?
-    #    delta > 0  → asking < fair (undervalued → good)
-    #    delta < 0  → asking > fair (overvalued → bad)
-    delta_ratio = (fair_price - market_price) / fair_price  # -1..+1
-    price_score = 50.0 + delta_ratio * 50.0                 # maps to 0..100
+    # 1. Price delta component (0–60 points).
+    #    Uses listing price vs fair price. Capped so that even extreme overpricing
+    #    doesn't drop below 0 (the property itself still has value).
+    delta_ratio = (fair_price - market_price) / fair_price  # negative = overpriced
+    # Map delta_ratio [-1..+1] → price_component [0..60]
+    price_component = 30.0 + delta_ratio * 30.0
+    price_component = max(0.0, min(60.0, price_component))
 
-    # 2. Condition factor
+    # 2. Condition component (0–30 points)
     cond_key = condition.lower().strip() if condition else ""
     cond_factor = _CONDITION_SCORE_FACTOR.get(cond_key, 0.75)
-    # Partial match fallback
-    if cond_factor == 0.75:
+    if cond_factor == 0.75:  # partial match
         for key, val in _CONDITION_SCORE_FACTOR.items():
             if key in cond_key:
                 cond_factor = val
                 break
+    condition_component = cond_factor * 30.0  # max 30 points
 
-    # 3. Absolute price factor: cheaper properties are more liquid in KG
+    # 3. Liquidity component (0–10 points): affordable properties sell faster in KG
     if fair_price < 50_000:
-        liquidity_bonus = 10.0
+        liquidity_component = 10.0
     elif fair_price < 120_000:
-        liquidity_bonus = 5.0
-    elif fair_price > 500_000:
-        liquidity_bonus = -10.0
+        liquidity_component = 7.0
+    elif fair_price < 300_000:
+        liquidity_component = 4.0
     else:
-        liquidity_bonus = 0.0
+        liquidity_component = 1.0
 
-    raw = price_score * cond_factor + liquidity_bonus
-    return round(max(1.0, min(100.0, raw)), 2)
+    raw = price_component + condition_component + liquidity_component
+    # Floor of 20: even the worst overpriced property isn't a 1/100
+    return round(max(20.0, min(98.0, raw)), 2)
 
 
 class PricingService:
@@ -151,6 +179,10 @@ class PricingService:
         condition: str = "",
         series: str = "",
         listing_price: float | None = None,
+        listing_url: str = "",
+        property_type: str = "",
+        address: str = "",
+        gemini_estimated_price: float | None = None,
     ) -> dict[str, Any]:
         fair_price = self._estimate_price(
             bedrooms=bedrooms,
@@ -161,7 +193,19 @@ class PricingService:
             city=city,
             condition=condition,
             series=series,
+            property_type=property_type,
+            address=address,
         )
+
+        # Blend with Gemini's valuation when available.
+        # Gemini analyzes photos + text context; heuristic uses benchmarks.
+        # Weighted blend: 40% Gemini + 60% heuristic (heuristic anchors to market data).
+        if gemini_estimated_price and gemini_estimated_price > 0:
+            fair_price = round(0.60 * fair_price + 0.40 * gemini_estimated_price, 2)
+            logger.info(
+                "Blended price: heuristic=%.0f, gemini=%.0f → final=%.0f",
+                fair_price / 0.60, gemini_estimated_price, fair_price,
+            )
 
         market_price = listing_price or fair_price
         inv_score = calculate_investment_score(market_price, fair_price, condition)
@@ -176,7 +220,7 @@ class PricingService:
             "rental_yield_pct": round(self._rental_yield(fair_price, city), 2),
             "appreciation_trend_pct": round(self._appreciation(city, state), 2),
             "price_delta_pct": price_delta_pct,
-            "comparable_sales": self._comparables(fair_price, bedrooms, square_feet, city),
+            "comparable_sales": self._fetch_comparables(city, bedrooms, listing_price),
             "confidence_interval": {
                 "low": round(fair_price * 0.88, 2),
                 "high": round(fair_price * 1.12, 2),
@@ -208,10 +252,15 @@ class PricingService:
         city: str,
         condition: str,
         series: str = "",
+        property_type: str = "",
+        address: str = "",
     ) -> float:
         if self._model is not None:
             return self._predict_with_model(bedrooms, bathrooms, square_feet, lot_size_sqft, year_built)
-        return self._heuristic_kg(bedrooms, square_feet, lot_size_sqft, year_built, city, condition, series)
+        return self._heuristic_kg(
+            bedrooms, square_feet, lot_size_sqft, year_built,
+            city, condition, series, property_type, address,
+        )
 
     def _predict_with_model(self, bedrooms, bathrooms, square_feet, lot_size_sqft, year_built) -> float:
         features = np.array([[
@@ -232,41 +281,56 @@ class PricingService:
         city: str,
         condition: str,
         series: str = "",
+        property_type: str = "",
+        address: str = "",
     ) -> float:
         sqm = square_feet or (bedrooms or 2) * 25 + 20
         city_key = city.lower().strip()
+        addr_key = address.lower()
 
+        # ── Building price per sqm ────────────────────────────────────────────
         price_per_sqm = _DEFAULT_PRICE_PER_SQM
         for key, val in _CITY_PRICE_PER_SQM.items():
             if key in city_key or city_key in key:
                 price_per_sqm = val
                 break
 
+        # ── Property type multiplier ──────────────────────────────────────────
+        # Houses / cottages command 25–40% premium over apartments per sqm
+        # because they include individual infrastructure (roof, foundation, etc.)
+        prop_type_key = property_type.lower()
+        is_house = (
+            any(t in prop_type_key for t in ("дом", "коттедж", "house", "cottage", "таун"))
+            or (lot_size_sqft is not None and lot_size_sqft >= 200)  # infer from land area
+        )
+        if is_house:
+            price_per_sqm *= 1.30
+
         base = sqm * price_per_sqm
 
-        # Condition adjustment
+        # ── Condition adjustment ──────────────────────────────────────────────
         cond_key = condition.lower().strip() if condition else ""
         for key, mult in _CONDITION_MULTIPLIERS.items():
             if key in cond_key:
                 base *= mult
                 break
 
-        # Housing series adjustment (Bishkek-specific)
-        series_key = series.lower().strip() if series else ""
-        if not series_key:
-            # Try to detect series from condition string
-            combined = f"{cond_key} {city_key}"
-            for key in _SERIES_MULTIPLIERS:
-                if key in combined:
-                    series_key = key
-                    break
-        if series_key:
-            for key, mult in _SERIES_MULTIPLIERS.items():
-                if key in series_key or series_key in key:
-                    base *= mult
-                    break
+        # ── Housing series adjustment (apartments only) ───────────────────────
+        if not is_house:
+            series_key = series.lower().strip() if series else ""
+            if not series_key:
+                combined = f"{cond_key} {city_key}"
+                for key in _SERIES_MULTIPLIERS:
+                    if key in combined:
+                        series_key = key
+                        break
+            if series_key:
+                for key, mult in _SERIES_MULTIPLIERS.items():
+                    if key in series_key or series_key in key:
+                        base *= mult
+                        break
 
-        # Age adjustment
+        # ── Age adjustment ────────────────────────────────────────────────────
         if year_built:
             age = 2024 - year_built
             if age > 40:
@@ -276,14 +340,26 @@ class PricingService:
             elif age < 5:
                 base *= 1.10
 
-        # Land bonus
-        if lot_size_sqft and lot_size_sqft > 100:
-            base += min(lot_size_sqft, 1000) * 15
+        # ── Land value (houses only) ──────────────────────────────────────────
+        # lot_size_sqft is actually sqm (post-Soviet standard despite the field name).
+        # Uses realistic per-sqm land prices, not a flat $15 bonus.
+        if lot_size_sqft and lot_size_sqft >= 50:
+            land_price_per_sqm = _DEFAULT_LAND_PRICE_PER_SQM
+            for key, val in _CITY_LAND_PRICE_PER_SQM.items():
+                if key in city_key or city_key in key:
+                    land_price_per_sqm = val
+                    break
 
-        # Flag: seller overpricing (>500k in districts averaging <300k)
-        # This is informational only; fair_price stays as calculated
-        if base < 300_000:
-            logger.debug("Fair price $%.0f — watch for overpriced listings in this district.", base)
+            # Central streets command a premium on land
+            if any(street in addr_key for street in _CENTRAL_STREETS):
+                land_price_per_sqm *= 1.80
+
+            land_value = lot_size_sqft * land_price_per_sqm
+            base += land_value
+            logger.debug(
+                "Land value: %d sqm × $%.0f/sqm = $%.0f",
+                lot_size_sqft, land_price_per_sqm, land_value,
+            )
 
         return max(base, 5_000)
 
@@ -326,33 +402,14 @@ class PricingService:
         return 4.2
 
     @staticmethod
-    def _comparables(
-        estimated_price: float,
-        bedrooms: int | None,
-        square_feet: int | None,
+    def _fetch_comparables(
         city: str,
+        bedrooms: int | None,
+        listing_price: float | None,
     ) -> list[dict[str, Any]]:
-        rng = random.Random(int(estimated_price) % 9999)
-        beds = bedrooms or 2
-        sqm = square_feet or 55
-
-        if "бишкек" in city.lower() or "bishkek" in city.lower():
-            streets = [
-                "ул. Манаса", "ул. Чуй", "мкр Аламедин", "мкр Джал",
-                "ул. Байтик Баатыра", "мкр Асанбай", "ул. Токомбаева", "мкр Восток-5",
-            ]
-        elif "ош" in city.lower():
-            streets = ["ул. Ленина", "ул. Курманжан Датки", "мкр Он-Адыр", "ул. Масалиева"]
-        else:
-            streets = ["ул. Ленина", "ул. Советская", "ул. Центральная", "ул. Мира"]
-
-        return [
-            {
-                "address": f"{rng.choice(streets)}, {rng.randint(1, 150)}",
-                "sale_price": round(estimated_price * (1 + rng.uniform(-0.13, 0.13)), -2),
-                "bedrooms": max(1, beds + rng.randint(-1, 1)),
-                "square_feet": sqm + rng.randint(-10, 10),
-                "days_ago": rng.randint(7, 120),
-            }
-            for _ in range(5)
-        ]
+        """
+        Fetch real comparable listings from house.kg search.
+        Returns empty list if scraping fails — never returns fake data.
+        """
+        from services.kg_scraper import scrape_comparables
+        return scrape_comparables(city=city, bedrooms=bedrooms, listing_price=listing_price)

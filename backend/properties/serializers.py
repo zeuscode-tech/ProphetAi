@@ -27,6 +27,12 @@ class PropertyListSerializer(serializers.ModelSerializer):
 class PropertyDetailSerializer(serializers.ModelSerializer):
     photos = PropertyPhotoSerializer(many=True, read_only=True)
     price_delta_pct = serializers.FloatField(read_only=True)
+    # DRF serializes DecimalField as strings by default; cast to float for the frontend
+    rental_yield_pct = serializers.FloatField(read_only=True)
+    appreciation_trend_pct = serializers.FloatField(read_only=True)
+    investment_score = serializers.FloatField(read_only=True)
+    listing_price = serializers.FloatField(read_only=True)
+    ai_estimated_price = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Property

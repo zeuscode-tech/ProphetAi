@@ -19,7 +19,7 @@ function Tip({ active, payload }: TProps) {
     <div className="glass rounded-lg p-3 text-xs shadow-xl border border-glass-border-light">
       <p className="font-semibold text-white max-w-[180px] truncate">{d.address}</p>
       <p className="text-neon-cyan font-semibold">{fmtUSD(d.sale_price)}</p>
-      {d.days_ago && <p className="mt-0.5 text-slate-500">{d.days_ago} days ago</p>}
+          {d.days_ago && <p className="mt-0.5 text-slate-500">{d.days_ago} дн. назад</p>}
     </div>
   );
 }
@@ -36,17 +36,17 @@ export default function PriceChart({ property, comparables }: Props) {
           <XAxis dataKey="address" tick={{ fill: "#64748b", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: string) => v.split(" ").slice(0, 2).join(" ")} />
           <YAxis tick={{ fill: "#64748b", fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
           <Tooltip content={<Tip />} cursor={{ fill: "rgba(255,255,255,0.02)" }} />
-          {est && <ReferenceLine y={est} stroke="#06d6a0" strokeDasharray="4 3" label={{ value: "Estimate", fill: "#06d6a0", fontSize: 10, position: "insideTopRight" }} />}
-          {list && <ReferenceLine y={list} stroke="#7b61ff" strokeDasharray="4 3" label={{ value: "Listing", fill: "#7b61ff", fontSize: 10, position: "insideTopLeft" }} />}
+          {est && <ReferenceLine y={est} stroke="#06d6a0" strokeDasharray="4 3" label={{ value: "Оценка", fill: "#06d6a0", fontSize: 10, position: "insideTopRight" }} />}
+          {list && <ReferenceLine y={list} stroke="#7b61ff" strokeDasharray="4 3" label={{ value: "Объявление", fill: "#7b61ff", fontSize: 10, position: "insideTopLeft" }} />}
           <Bar dataKey="sale_price" radius={[6, 6, 0, 0]} maxBarSize={50}>
             {data.map((_, i) => <Cell key={i} fill="rgba(76,201,240,0.4)" />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
       <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
-        <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 border-t-2 border-dashed border-neon-cyan" />Estimate</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 border-t-2 border-dashed border-neon-purple" />Listing</span>
-        <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-4 rounded-sm bg-neon-blue/40" />Comparable</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 border-t-2 border-dashed border-neon-cyan" />Оценка</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 border-t-2 border-dashed border-neon-purple" />Объявление</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-2 w-4 rounded-sm bg-neon-blue/40" />Аналог</span>
       </div>
     </div>
   );

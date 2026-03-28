@@ -75,29 +75,66 @@ class AnalysePropertyView(APIView):
             prop.year_built   = gemini_result.get("year_built")
             prop.listing_price = gemini_result.get("listing_price")
 
+            # Save raw listing data from scraper
+            scraped = gemini_svc.last_scraped
+            prop.listing_params = scraped.get("params", {})
+            if scraped.get("phone_number"):
+                prop.phone_number = scraped["phone_number"]
+            if scraped.get("map_lat") and scraped.get("map_lng"):
+                prop.map_lat = scraped["map_lat"]
+                prop.map_lng = scraped["map_lng"]
+
             condition_block = gemini_result.get("condition_analysis", {})
             prop.red_flags    = condition_block.get("red_flags", [])
-            prop.photo_insights = gemini_result.get("photo_captions", [])
+
+            # ── Photo insights: deduplicate by room_type, attach real photo URLs ─
+            raw_insights = gemini_result.get("photo_insights", [])
+            photo_urls = scraped.get("photo_urls", [])
+            seen_rooms: set[str] = set()
+            unique_insights = []
+            for ins in raw_insights:
+                if not isinstance(ins, dict):
+                    continue
+                rt = (ins.get("room_type") or "Общий вид").strip()
+                if rt in seen_rooms:
+                    continue
+                seen_rooms.add(rt)
+                # Attach a real photo URL by position
+                idx = len(unique_insights)
+                ins["photo_url"] = photo_urls[idx] if idx < len(photo_urls) else ""
+                unique_insights.append(ins)
+
+            prop.photo_insights = unique_insights
             prop.gemini_raw_response = gemini_result
 
-            # Gemini valuation/investment as fallbacks
-            gemini_valuation  = gemini_result.get("valuation", {})
-            gemini_inv        = gemini_result.get("investment_potential", {})
+            # Gemini investment potential (fallback if PricingService fails)
+            gemini_inv = gemini_result.get("investment_potential", {})
 
             # ── Step 3: PricingService (KG heuristic / XGBoost) ──────────────
             try:
                 pricing_svc = PricingService()
+                gemini_valuation = gemini_result.get("valuation", {})
+                gemini_est = gemini_valuation.get("estimated_price")
+                try:
+                    gemini_est = float(gemini_est) if gemini_est else None
+                except (ValueError, TypeError):
+                    gemini_est = None
+
                 pricing_result = pricing_svc.predict(
-                    bedrooms      = prop.bedrooms,
-                    bathrooms     = float(prop.bathrooms) if prop.bathrooms else None,
-                    square_feet   = prop.square_feet,
-                    lot_size_sqft = prop.lot_size_sqft,
-                    year_built    = prop.year_built,
-                    city          = prop.city,
-                    state         = prop.state,
-                    zip_code      = prop.zip_code,
-                    condition     = gemini_result.get("condition", ""),
-                    listing_price = float(prop.listing_price) if prop.listing_price else None,
+                    bedrooms               = prop.bedrooms,
+                    bathrooms              = float(prop.bathrooms) if prop.bathrooms else None,
+                    square_feet            = prop.square_feet,
+                    lot_size_sqft          = prop.lot_size_sqft,
+                    year_built             = prop.year_built,
+                    city                   = prop.city,
+                    state                  = prop.state,
+                    zip_code               = prop.zip_code,
+                    condition              = gemini_result.get("condition", ""),
+                    listing_price          = float(prop.listing_price) if prop.listing_price else None,
+                    listing_url            = listing_url,
+                    property_type          = gemini_result.get("property_type", ""),
+                    address                = prop.address,
+                    gemini_estimated_price = gemini_est,
                 )
 
                 prop.ai_estimated_price    = pricing_result["estimated_price"]
@@ -109,7 +146,7 @@ class AnalysePropertyView(APIView):
             except Exception as pricing_err:
                 logger.warning("PricingService failed: %s", pricing_err)
                 # Fallback to Gemini's own estimates
-                prop.ai_estimated_price = gemini_valuation.get("estimated_price")
+                prop.ai_estimated_price = gemini_result.get("valuation", {}).get("estimated_price")
                 prop.investment_score   = gemini_inv.get("score")
 
             # ── Step 4: Ensure no blanks — fallback defaults ─────────────────
@@ -145,8 +182,32 @@ class AnalysePropertyView(APIView):
                 else:
                     prop.appreciation_trend_pct = 4.2
 
-            # If no comparable sales from PricingService, leave empty —
-            # frontend will show "Нет данных" instead of fake addresses.
+            # ── Step 5: Inject overpricing red flag if price delta is significant ─
+            if prop.listing_price and prop.ai_estimated_price:
+                listing_p = float(prop.listing_price)
+                estimated_p = float(prop.ai_estimated_price)
+                if estimated_p > 0:
+                    overprice_pct = (listing_p - estimated_p) / estimated_p * 100
+                    existing_issues = {f.get("issue", "").lower() for f in prop.red_flags if isinstance(f, dict)}
+                    if overprice_pct >= 30 and not any("переплат" in i or "overpriced" in i for i in existing_issues):
+                        prop.red_flags = list(prop.red_flags) + [{
+                            "issue": "Значительная переплата",
+                            "severity": "high",
+                            "description": (
+                                f"Запрашиваемая цена на {overprice_pct:.0f}% выше рыночной оценки ProphetAI "
+                                f"(${estimated_p:,.0f}). Это снижает инвестиционную привлекательность "
+                                f"и потенциал перепродажи."
+                            ),
+                        }]
+                    elif 15 <= overprice_pct < 30 and not any("переплат" in i or "overpriced" in i for i in existing_issues):
+                        prop.red_flags = list(prop.red_flags) + [{
+                            "issue": "Умеренная переплата",
+                            "severity": "medium",
+                            "description": (
+                                f"Цена на {overprice_pct:.0f}% выше оценки ProphetAI. "
+                                f"Рекомендуется переговорить о скидке перед покупкой."
+                            ),
+                        }]
 
             prop.status      = Property.StatusChoices.COMPLETED
             prop.analysed_at = timezone.now()

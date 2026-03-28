@@ -10,20 +10,20 @@ const HOUSE_PHOTOS = [
 ];
 
 const ROOM_PHOTOS = [
-  { url: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=600&q=80", room: "Living Room" },
-  { url: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80", room: "Kitchen" },
-  { url: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=600&q=80", room: "Bedroom" },
-  { url: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=600&q=80", room: "Bathroom" },
-  { url: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80", room: "Backyard" },
-  { url: "https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=600&q=80", room: "Garage" },
+  { url: "https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=600&q=80", room: "Гостиная" },
+  { url: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80", room: "Кухня" },
+  { url: "https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=600&q=80", room: "Спальня" },
+  { url: "https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=600&q=80", room: "Ванная" },
+  { url: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80", room: "Двор" },
+  { url: "https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=600&q=80", room: "Гараж" },
 ];
 
 const FLAGS: RedFlag[] = [
-  { category: "Structural", description: "Minor foundation crack visible in basement photos. Recommend professional inspection.", severity: "High" },
-  { category: "Water Damage", description: "Discoloration on ceiling in upstairs bathroom suggests past or current water leak.", severity: "Medium" },
-  { category: "Electrical", description: "Older electrical panel observed — may not meet current code requirements.", severity: "Medium" },
-  { category: "Cosmetic", description: "Peeling paint on exterior trim and worn carpeting in living areas.", severity: "Low" },
-  { category: "Pricing", description: "Listed 12% above comparable sales in the area for similar properties.", severity: "High" },
+  { category: "Structural", description: "Небольшая трещина фундамента видна на фото подвала. Рекомендуется профессиональная проверка.", severity: "High" },
+  { category: "Water Damage", description: "Обесцвечивание потолка в ванной на втором этаже свидетельствует о протечке.", severity: "Medium" },
+  { category: "Electrical", description: "Устаревший электрощит — может не соответствовать действующим нормам.", severity: "Medium" },
+  { category: "Cosmetic", description: "Отслаивающаяся краска фасада и изношенное покрытие пола в жилых помещениях.", severity: "Low" },
+  { category: "Pricing", description: "Цена на 12% выше аналогичных объектов в районе.", severity: "High" },
 ];
 
 const COMPS: ComparableSale[] = [
@@ -40,12 +40,12 @@ function makeInsights(): PhotoInsight[] {
     room_type: p.room,
     condition_score: [8.2, 6.5, 7.8, 4.2, 9.0, 5.5][i],
     observations: [
-      ["Hardwood floors in good condition", "Natural light from large windows"],
-      ["Dated countertops", "Functional appliances but aging"],
-      ["Spacious layout", "Fresh paint on walls"],
-      ["Tile grout needs resealing", "Potential water stain on ceiling"],
-      ["Well-maintained landscaping", "Deck needs refinishing"],
-      ["Single car garage", "Adequate storage space"],
+      ["Паркет в хорошем состоянии", "Большие окна, много естественного света"],
+      ["Устаревшие столешницы", "Функциональная, но стареющая техника"],
+      ["Просторная планировка", "Свежая покраска стен"],
+      ["Затирка межплиточного шва нуждается в обработке", "Возможное пятно на потолке"],
+      ["Ухоженное благоустройство", "Терраса требует обновления покрытия"],
+      ["Одноместный гараж", "Достаточно места для хранения"],
     ][i],
     renovation_needed: [false, true, false, true, false, true][i],
     estimated_reno_cost_usd: [null, 15000, null, 8000, null, 5000][i],
@@ -182,5 +182,9 @@ export function getDemoProperty(id: number): PropertyDetail {
       condition_score: [8, 7, 6, 8, 9, 7][i],
     })),
     analysed_at: summary.created_at,
+    listing_params: null,
+    phone_number: null,
+    map_lat: null,
+    map_lng: null,
   };
 }

@@ -44,7 +44,7 @@ export default function PropertyCard({ property }: Props) {
 
       {/* Info */}
       <div className="p-4">
-        <p className="text-sm font-semibold text-white truncate">{property.address || "Address pending..."}</p>
+        <p className="text-sm font-semibold text-white truncate">{property.address || "Адрес уточняется..."}</p>
         <p className="text-xs text-slate-500 truncate mt-0.5">{[property.city, property.state].filter(Boolean).join(", ")}</p>
 
         <div className="mt-2.5 flex gap-4 text-xs text-slate-500">
@@ -55,7 +55,7 @@ export default function PropertyCard({ property }: Props) {
 
         <div className="mt-3 pt-3 border-t border-glass-border flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">Est.</span>
+            <span className="text-xs text-slate-500">Оценка</span>
             <span className="text-xs font-semibold text-neon-cyan">{fmtUSD(property.ai_estimated_price)}</span>
             {delta != null && (
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${delta >= 0 ? "bg-neon-cyan/10 text-neon-cyan" : "bg-neon-pink/10 text-neon-pink"}`}>

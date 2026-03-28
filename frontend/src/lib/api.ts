@@ -70,6 +70,11 @@ export interface PropertyDetail extends PropertySummary {
   photo_insights: PhotoInsight[];
   photos: { id: number; url: string; room_type: string; condition_score: number | null }[];
   analysed_at: string | null;
+  // Raw listing data from scraper
+  listing_params: Record<string, string> | null;
+  phone_number: string | null;
+  map_lat: number | null;
+  map_lng: number | null;
 }
 
 export interface PaginatedResponse<T> {
