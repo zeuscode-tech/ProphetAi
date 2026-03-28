@@ -9,9 +9,10 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 // ──────────────────────────────────────────────
 
 export interface RedFlag {
-  category: string;
-  description: string;
-  severity: "Low" | "Medium" | "High";
+  issue?: string;
+  category?: string;
+  description?: string;
+  severity: "Low" | "Medium" | "High" | "low" | "medium" | "high";
 }
 
 export interface PhotoInsight {

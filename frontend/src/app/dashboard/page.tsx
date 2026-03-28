@@ -30,25 +30,25 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-50">Property Dashboard</h1>
+          <h1 className="text-3xl font-bold text-slate-50">Панель объектов</h1>
           <p className="mt-1 text-sm text-slate-400">
-            {count} propert{count !== 1 ? "ies" : "y"} analysed
+            {count} объект{count !== 1 ? "ов" : ""} проанализировано
           </p>
         </div>
         <Link
           href="/"
           className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-500 transition-colors"
         >
-          + New Analysis
+          + Новый анализ
         </Link>
       </div>
 
       {/* Summary stats */}
       <div className="mb-8 grid gap-4 sm:grid-cols-3">
         {[
-          { label: "Total Analysed", value: count },
+          { label: "Всего проанализ.", value: count },
           {
-            label: "Avg Investment Score",
+            label: "Средн. рейтинг",
             value:
               properties.length > 0
                 ? (
@@ -63,7 +63,7 @@ export default function DashboardPage() {
                 : "—",
           },
           {
-            label: "Red Flags Detected",
+            label: "Красных флагов",
             value: properties.reduce((acc, p) => acc + (p.red_flags?.length ?? 0), 0),
           },
         ].map((stat) => (
@@ -96,9 +96,9 @@ export default function DashboardPage() {
       ) : properties.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-slate-500">
           <span className="text-5xl mb-4">🏠</span>
-          <p className="text-lg font-medium">No properties analysed yet.</p>
+          <p className="text-lg font-medium">Объекты ещё не анализировались.</p>
           <Link href="/" className="mt-4 text-brand-400 hover:underline">
-            Analyse your first listing →
+            Анализировать первое объявление →
           </Link>
         </div>
       ) : (
@@ -117,17 +117,17 @@ export default function DashboardPage() {
             onClick={() => setPage((p) => p - 1)}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-400 hover:border-slate-500 disabled:opacity-40"
           >
-            ← Prev
+            ← Назад
           </button>
           <span className="text-sm text-slate-500">
-            Page {page} of {totalPages}
+            Страница {page} из {totalPages}
           </span>
           <button
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
             className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-400 hover:border-slate-500 disabled:opacity-40"
           >
-            Next →
+            Далее →
           </button>
         </div>
       )}

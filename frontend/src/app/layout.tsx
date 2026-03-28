@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ProphetAI — AI Real Estate Analytics",
+  title: "ProphetAI — AI-аналитика недвижимости",
   description:
-    "Paste a listing URL and get instant AI-powered property valuations and red flag detection.",
+    "Вставьте ссылку на объявление и получите мгновенную AI-оценку стоимости и выявление рисков.",
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="ru" className="dark">
       <body className="min-h-screen bg-slate-950 text-slate-100 antialiased">
         {/* Top navigation bar */}
         <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/80 backdrop-blur-md">
@@ -28,13 +28,13 @@ export default function RootLayout({
             </a>
             <div className="flex items-center gap-6 text-sm font-medium text-slate-400">
               <a href="/dashboard" className="hover:text-slate-100 transition-colors">
-                Dashboard
+                Панель
               </a>
               <a
                 href="/"
                 className="rounded-lg bg-brand-600 px-4 py-1.5 text-white hover:bg-brand-500 transition-colors"
               >
-                + New Analysis
+                + Новый анализ
               </a>
             </div>
           </div>
@@ -43,8 +43,8 @@ export default function RootLayout({
         <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
 
         <footer className="mt-16 border-t border-slate-800 py-6 text-center text-xs text-slate-600">
-          © {new Date().getFullYear()} ProphetAI · Built by ZeusCode Tech ·{" "}
-          <span className="text-slate-500">Powered by Gemini & XGBoost</span>
+          © {new Date().getFullYear()} ProphetAI · Создано ZeusCode Tech ·{" "}
+          <span className="text-slate-500">На базе Gemini & XGBoost</span>
         </footer>
       </body>
     </html>

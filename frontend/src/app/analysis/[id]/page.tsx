@@ -40,7 +40,7 @@ export default function AnalysisPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
           </svg>
-          <p className="text-sm">Loading analysis…</p>
+          <p className="text-sm">Загрузка анализа…</p>
         </div>
       </div>
     );
@@ -49,7 +49,7 @@ export default function AnalysisPage() {
   if (error || !property) {
     return (
       <div className="rounded-xl border border-red-800 bg-red-950/30 p-6 text-red-400">
-        {error ?? "Property not found."}
+        {error ?? "Объект не найден."}
       </div>
     );
   }
@@ -64,7 +64,7 @@ export default function AnalysisPage() {
         onClick={() => router.back()}
         className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors"
       >
-        ← Back to dashboard
+        ← Назад
       </button>
 
       {/* Property header */}
@@ -72,18 +72,18 @@ export default function AnalysisPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-50">
-              {property.address || "Address unavailable"}
+              {property.address || "Адрес недоступен"}
             </h1>
             <p className="mt-0.5 text-slate-400">
               {[property.city, property.state, property.zip_code].filter(Boolean).join(", ")}
             </p>
             <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-300">
-              {property.bedrooms != null && <span>🛏 {property.bedrooms} beds</span>}
-              {property.bathrooms != null && <span>🚿 {property.bathrooms} baths</span>}
+              {property.bedrooms != null && <span>🛏 {property.bedrooms} комн.</span>}
+              {property.bathrooms != null && <span>🚿 {property.bathrooms} сануз.</span>}
               {property.square_feet != null && (
-                <span>📐 {fmt(property.square_feet)} sqft</span>
+                <span>📐 {fmt(property.square_feet)} м²</span>
               )}
-              {property.year_built != null && <span>🗓 Built {property.year_built}</span>}
+              {property.year_built != null && <span>🗓 Год постройки {property.year_built}</span>}
             </div>
           </div>
 
@@ -106,19 +106,19 @@ export default function AnalysisPage() {
         {/* Price row */}
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
           <div>
-            <p className="text-xs uppercase tracking-widest text-slate-500">Listing Price</p>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Цена объявления</p>
             <p className="mt-1 text-2xl font-bold text-slate-100">
               {fmtUSD(property.listing_price)}
             </p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-widest text-slate-500">AI Estimate</p>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Оценка AI</p>
             <p className="mt-1 text-2xl font-bold text-brand-400">
               {fmtUSD(property.ai_estimated_price)}
             </p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-widest text-slate-500">Price Delta</p>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Разница цены</p>
             <p
               className={`mt-1 text-2xl font-bold ${
                 delta == null
@@ -136,8 +136,8 @@ export default function AnalysisPage() {
               {delta == null
                 ? ""
                 : deltaPositive
-                ? "Undervalued vs listing"
-                : "Overvalued vs listing"}
+                ? "Ниже рынка"
+                : "Выше рынка"}}
             </p>
           </div>
         </div>
@@ -146,24 +146,24 @@ export default function AnalysisPage() {
       {/* Investment Score + Metrics row */}
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="sm:col-span-1 gradient-border rounded-2xl bg-slate-900/60 p-5 flex flex-col items-center justify-center">
-          <p className="mb-3 text-xs uppercase tracking-widest text-slate-500">Investment Score</p>
+          <p className="mb-3 text-xs uppercase tracking-widest text-slate-500">Инвест. рейтинг</p>
           <InvestmentScoreGauge score={property.investment_score} />
         </div>
         {[
           {
-            label: "Rental Yield",
-            value: typeof property.rental_yield_pct === 'number' ? `${property.rental_yield_pct.toFixed(1)}%` : "-",
-            sub: "Estimated gross annual yield",
+            label: "Доходность аренды",
+            value: typeof property.rental_yield_pct === 'number' ? `${property.rental_yield_pct.toFixed(1)}%` : "—",
+            sub: "Ожидаемая годовая доходность",
           },
           {
-            label: "Appreciation Trend",
-            value: typeof property.appreciation_trend_pct === 'number' ? `${property.appreciation_trend_pct.toFixed(1)}%` : "-",
-            sub: "12-month area average",
+            label: "Тренд роста цен",
+            value: typeof property.appreciation_trend_pct === 'number' ? `${property.appreciation_trend_pct.toFixed(1)}%` : "—",
+            sub: "Средний рост за 12 мес.",
           },
           {
-            label: "Red Flags",
+            label: "Красные флаги",
             value: property.red_flags?.length ?? 0,
-            sub: "Issues detected by AI",
+            sub: "Проблемы, обнаруженные AI",
           },
         ].map((m) => (
           <div key={m.label} className="gradient-border rounded-2xl bg-slate-900/60 p-5">
@@ -174,16 +174,25 @@ export default function AnalysisPage() {
         ))}
       </div>
 
-      {/* Price chart */}
-      {property.comparable_sales && property.comparable_sales.length > 0 && (
+      {/* Comparable sales */}
+      {property.comparable_sales && property.comparable_sales.length > 0 ? (
         <div className="gradient-border rounded-2xl bg-slate-900/60 p-6">
           <h2 className="mb-4 text-lg font-semibold text-slate-100">
-            Comparable Sales
+            Похожие объекты в районе
           </h2>
           <PriceChart
             property={property}
             comparables={property.comparable_sales}
           />
+        </div>
+      ) : (
+        <div className="gradient-border rounded-2xl bg-slate-900/60 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-slate-100">
+            Похожие объекты в районе
+          </h2>
+          <p className="text-sm text-slate-500">
+            Нет точных совпадений в данном микрорайоне. Данные появятся по мере пополнения базы.
+          </p>
         </div>
       )}
 
@@ -191,7 +200,7 @@ export default function AnalysisPage() {
       {property.red_flags && property.red_flags.length > 0 && (
         <div>
           <h2 className="mb-4 text-lg font-semibold text-slate-100">
-            ⚠️ Red Flags ({property.red_flags.length})
+            ⚠️ Красные флаги ({property.red_flags.length})
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {property.red_flags.map((flag, i) => (
@@ -205,7 +214,7 @@ export default function AnalysisPage() {
       {property.photo_insights && property.photo_insights.length > 0 && (
         <div>
           <h2 className="mb-4 text-lg font-semibold text-slate-100">
-            🖼️ Photo Insights
+            🖼️ Анализ фотографий
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {property.photo_insights.map((insight, i) => (
@@ -217,7 +226,7 @@ export default function AnalysisPage() {
 
       {/* Listing URL */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-500">
-        <span className="font-medium text-slate-400">Source URL: </span>
+        <span className="font-medium text-slate-400">Источник: </span>
         <a
           href={property.listing_url}
           target="_blank"

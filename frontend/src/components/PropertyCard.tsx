@@ -22,7 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function PropertyCard({ property }: Props) {
-  const delta = property.price_delta_pct;
+  const delta = property.price_delta_pct != null ? Number(property.price_delta_pct) : null;
 
   return (
     <Link
@@ -33,7 +33,7 @@ export default function PropertyCard({ property }: Props) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate font-semibold text-slate-100">
-            {property.address || "Address pending…"}
+            {property.address || "Адрес загружается…"}
           </p>
           <p className="mt-0.5 truncate text-xs text-slate-500">
             {[property.city, property.state].filter(Boolean).join(", ")}
@@ -53,20 +53,20 @@ export default function PropertyCard({ property }: Props) {
         {property.bedrooms != null && <span>🛏 {property.bedrooms}</span>}
         {property.bathrooms != null && <span>🚿 {property.bathrooms}</span>}
         {property.square_feet != null && (
-          <span>📐 {property.square_feet.toLocaleString()} sqft</span>
+          <span>📐 {property.square_feet.toLocaleString()} м²</span>
         )}
       </div>
 
       {/* Price row */}
       <div className="mt-4 flex items-end justify-between">
         <div>
-          <p className="text-xs text-slate-500">Listing</p>
+          <p className="text-xs text-slate-500">Цена в объявлении</p>
           <p className="text-sm font-semibold text-slate-200">
             {fmtUSD(property.listing_price)}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-slate-500">AI Estimate</p>
+          <p className="text-xs text-slate-500">Оценка ProphetAI</p>
           <p className="text-sm font-semibold text-brand-400">
             {fmtUSD(property.ai_estimated_price)}
           </p>
@@ -89,15 +89,15 @@ export default function PropertyCard({ property }: Props) {
       {property.investment_score != null && (
         <div className="mt-4">
           <div className="mb-1 flex justify-between text-xs text-slate-500">
-            <span>Investment Score</span>
+            <span>Инвест. рейтинг</span>
             <span className="font-semibold text-slate-300">
-              {property.investment_score.toFixed(0)} / 100
+              {Number(property.investment_score).toFixed(0)} / 100
             </span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
             <div
               className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent"
-              style={{ width: `${Math.min(property.investment_score, 100)}%` }}
+              style={{ width: `${Math.min(Number(property.investment_score), 100)}%` }}
             />
           </div>
         </div>

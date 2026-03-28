@@ -37,7 +37,7 @@ export default function PhotoInsightCard({ insight }: Props) {
         {/* Room type + condition score */}
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-slate-200">
-            {insight.room_type || "Unknown Room"}
+            {insight.room_type && insight.room_type !== "Unknown Room" ? insight.room_type : "Общий интерьер"}
           </span>
           <span className="text-xs text-slate-400">
             {insight.condition_score?.toFixed(1)} / 10
@@ -60,7 +60,7 @@ export default function PhotoInsightCard({ insight }: Props) {
         {/* Renovation flag */}
         {hasReno && (
           <div className="mt-3 rounded-lg border border-amber-800 bg-amber-950/30 px-3 py-2 text-xs text-amber-400">
-            🔨 Renovation needed
+            🔨 Требуется ремонт
             {insight.estimated_reno_cost_usd != null && (
               <span className="ml-1 font-semibold">
                 ~{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(insight.estimated_reno_cost_usd)}

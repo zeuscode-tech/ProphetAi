@@ -87,7 +87,7 @@ export default function InvestmentScoreGauge({ score }: Props) {
         className="text-sm font-semibold"
         style={{ color: fillColor }}
       >
-        {capped >= 70 ? "Strong Buy" : capped >= 40 ? "Neutral" : "Caution"}
+        {capped >= 70 ? "Покупать" : capped >= 40 ? "Нейтрально" : "Осторожно"}
       </p>
     </div>
   );

@@ -20,6 +20,7 @@ module.exports = {
           700: "#0369a1",
           800: "#075985",
           900: "#0c4a6e",
+          950: "#082f49",
         },
         accent: {
           DEFAULT: "#6366f1",
@@ -31,8 +32,8 @@ module.exports = {
         danger:  "#ef4444",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",

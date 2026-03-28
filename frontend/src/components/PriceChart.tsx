@@ -48,7 +48,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
       </p>
       <p className="text-brand-400">{fmtUSD(d.sale_price)}</p>
       {d.days_ago && (
-        <p className="mt-0.5 text-slate-500">{d.days_ago} days ago</p>
+        <p className="mt-0.5 text-slate-500">{d.days_ago} дн. назад</p>
       )}
     </div>
   );
@@ -96,7 +96,7 @@ export default function PriceChart({ property, comparables }: Props) {
               y={aiEstimate}
               stroke="#38bdf8"
               strokeDasharray="4 3"
-              label={{ value: "AI Est.", fill: "#38bdf8", fontSize: 10, position: "insideTopRight" }}
+              label={{ value: "Оценка AI", fill: "#38bdf8", fontSize: 10, position: "insideTopRight" }}
             />
           )}
 
@@ -106,7 +106,7 @@ export default function PriceChart({ property, comparables }: Props) {
               y={listingPrice}
               stroke="#6366f1"
               strokeDasharray="4 3"
-              label={{ value: "Listing", fill: "#6366f1", fontSize: 10, position: "insideTopLeft" }}
+              label={{ value: "Цена", fill: "#6366f1", fontSize: 10, position: "insideTopLeft" }}
             />
           )}
 
