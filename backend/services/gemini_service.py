@@ -22,54 +22,65 @@ logger = logging.getLogger(__name__)
 MAX_INLINE_PHOTOS = 5
 
 _LISTING_SCHEMA_PROMPT = """
-You are ProphetAI, an expert real estate analyst specialising in the Kyrgyzstan property market
-(but also capable of analysing any international listing).
+Act as a Professional Real Estate Investment Analyst specializing in the CIS market (Kyrgyzstan/Kazakhstan).
+Your task is to analyze property descriptions and images to provide a structured financial and technical assessment.
 
-Analyse the real estate listing content below and return ONLY a valid JSON object that exactly
-matches this schema — no markdown fences, no extra keys, no explanations:
+Return ONLY a valid JSON object. No markdown, no explanations outside the JSON.
 
 {
   "address": "<full street address>",
-  "city": "<city name, e.g. Бишкек / Ош / Чуй>",
-  "state": "<region or oblast, e.g. Чуйская / Ошская>",
-  "zip_code": "<ZIP or postal code if available, else null>",
+  "city": "<city, e.g. Бишкек / Ош>",
+  "state": "<region, e.g. Чуйская / Ошская>",
+  "zip_code": "<postal code or null>",
   "bedrooms": <integer or null>,
   "bathrooms": <number or null>,
-  "square_feet": <total area in sqm as integer, or null>,
-  "lot_size_sqft": <land area in sqm if available, else null>,
+  "square_feet": <area in sqm as integer or null>,
+  "lot_size_sqft": <land area in sqm or null>,
   "year_built": <integer or null>,
-  "listing_price": <price as a number in USD. If price is in KGS, convert: 1 USD ≈ 89 KGS>,
-  "currency": "<USD | KGS | RUB>",
-  "floor": <floor number as integer or null>,
-  "total_floors": <total floors in building as integer or null>,
+  "listing_price": <price in USD — convert from KGS if needed: 1 USD ≈ 89 KGS>,
   "property_type": "<Квартира | Дом | Коттедж | Участок | Коммерческая | Другое>",
   "condition": "<Новостройка | Евроремонт | Хорошее | Среднее | Требует ремонта>",
-  "description_summary": "<2–3 sentence summary in Russian>",
-  "red_flags": [
+  "description_summary": "<2-3 sentence summary in Russian>",
+  "neighbourhood_notes": "<district, infrastructure, transport access>",
+  "valuation": {
+    "estimated_price": <fair market price in USD based on district + condition, NOT seller price>,
+    "confidence_score": <0.0–1.0>,
+    "price_per_sqm": <USD per sqm>,
+    "market_position": "<undervalued | fair | overvalued>"
+  },
+  "condition_analysis": {
+    "repair_quality": <1–10>,
+    "style": "<modern | classic | soviet | unfinished>",
+    "features": ["<key feature from photos>"],
+    "red_flags": [
+      {
+        "issue": "<short title>",
+        "severity": "<high | medium | low>",
+        "description": "<why this is a risk>"
+      }
+    ]
+  },
+  "investment_potential": {
+    "score": <1–100>,
+    "rental_yield_est": "<percentage string, e.g. '7.5%'>",
+    "liquidity": "<high | medium | low>"
+  },
+  "photo_captions": [
     {
-      "category": "<Конструктив | Влажность | Электрика | Косметика | Юридическое | Цена | Другое>",
-      "description": "<что именно вызывает опасение>",
-      "severity": "<Low | Medium | High>"
+      "image_index": <0-based index>,
+      "label": "<room label in English>",
+      "detected_items": ["<item1>", "<item2>"]
     }
-  ],
-  "photo_insights": [
-    {
-      "photo_url": "<url>",
-      "room_type": "<Кухня | Гостиная | Спальня | Санузел | Фасад | Подвал | Двор | Другое>",
-      "condition_score": <1–10 float>,
-      "observations": ["<наблюдение 1>", "<наблюдение 2>"],
-      "renovation_needed": <true | false>,
-      "estimated_reno_cost_usd": <integer or null>
-    }
-  ],
-  "neighbourhood_notes": "<краткое описание района, инфраструктуры, транспортной доступности>"
+  ]
 }
 
-Important rules:
-- listing_price must always be in USD (convert if needed, 1 USD ≈ 89 KGS as of 2024)
-- square_feet field contains area in SQM (standard in KG/post-Soviet market), not sq.ft.
-- If a value cannot be determined, use null.
-- For Bishkek listings: note the district (мкр Аламедин, Асанбай, Джал, Восток-5, Южные Магистрали, etc.)
+STRICT RULES:
+1. If year_built is in the future (2025/2026+), add a high-severity red_flag: "Under Construction / Data Error".
+2. If description says "Luxury" / "Евроремонт" but photos show old furniture or poor finishes, add High severity red_flag: "Описание не соответствует фото".
+3. estimated_price must be calculated from district benchmarks + condition multiplier, not just the seller's price.
+4. listing_price always in USD (convert KGS → USD at 1:89).
+5. square_feet is sqm (post-Soviet standard), not square feet.
+6. If a value cannot be determined, use null.
 """
 
 class GeminiService:
@@ -146,9 +157,6 @@ class GeminiService:
         photo_urls: list[str],
         extra_context: str,
     ) -> list[Any]:
-        # --- ОТЛАДКА: Посмотрим, сколько ссылок пришло из скрапера ---
-        print(f"DEBUG: Scraper found {len(photo_urls)} photos total.")
-        
         parts: list[Any] = [
             _LISTING_SCHEMA_PROMPT,
             f"\n\n--- LISTING URL ---\n{listing_url}\n",
@@ -163,7 +171,7 @@ class GeminiService:
         if photo_urls:
             # Важно: берем срез [:MAX_INLINE_PHOTOS]
             valid_photos = photo_urls[:MAX_INLINE_PHOTOS]
-            print(f"--- Processing {len(valid_photos)} photos for Gemini Vision... ---")
+            logger.debug("Processing %d photos for Gemini Vision.", len(valid_photos))
             
             for url in valid_photos:
                 img_part = self._fetch_image_as_part(url)
@@ -176,19 +184,16 @@ class GeminiService:
 
     def _call_gemini(self, prompt_parts: list[Any]) -> str:
         try:
-            # Добавляем принт, чтобы видеть прогресс в терминале
-            print(f"--- Sending request to Gemini ({self._MODEL})... ---") 
+            logger.info("Sending request to Gemini (%s)...", self._MODEL)
             response = self._model.generate_content(prompt_parts)
-            
+
             if not response.text:
                 raise ValueError("Gemini returned empty response")
-                
-            print("--- Gemini responded successfully! ---")
+
+            logger.info("Gemini responded successfully.")
             return response.text
         except Exception as e:
-            print(f"!!! CRITICAL API ERROR: {str(e)}") # Это появится в черном окне
-            logger.error(f"Gemini API Error: {str(e)}")
-            # Вместо JSON возвращаем простую ошибку, чтобы parse_response это увидел
+            logger.error("Gemini API Error: %s", str(e))
             raise e
 
     @staticmethod
@@ -196,7 +201,7 @@ class GeminiService:
         cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.I)
         cleaned = re.sub(r"\s*```$", "", cleaned.strip())
         try:
-            return json.loads(cleaned)
+            data = json.loads(cleaned)
         except json.JSONDecodeError as exc:
             logger.error("Failed to parse Gemini JSON: %s\nRaw: %s", exc, text[:500])
             return {
@@ -206,3 +211,21 @@ class GeminiService:
                 "red_flags": [], "photo_insights": [],
                 "error": str(exc), "raw_response": text,
             }
+
+        # ── Normalize photo_captions labels ───────────────────────────────────
+        _UNKNOWN_LABELS = {"", "unknown", "other", "unknown room", "none", "null"}
+        for caption in data.get("photo_captions", []):
+            label = (caption.get("label") or "").strip()
+            if label.lower() in _UNKNOWN_LABELS:
+                caption["label"] = "Общий вид"
+
+        # ── Normalize red_flags issues ────────────────────────────────────────
+        for flag in data.get("condition_analysis", {}).get("red_flags", []):
+            issue = (flag.get("issue") or "").strip()
+            if not issue or issue.lower() in {"other", "unknown", "none"}:
+                flag["issue"] = "Анализ риска"
+            # Ensure category field exists for frontend
+            if not flag.get("category"):
+                flag["category"] = flag["issue"]
+
+        return data

@@ -11,13 +11,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load .env from the backend directory
 load_dotenv(BASE_DIR / ".env")
-print(f"DEBUG CHECK: Gemini Key is {'SET' if os.getenv('GEMINI_API_KEY') else 'NOT SET'}")
+
+import logging as _logging
+_logging.getLogger(__name__).info(
+    "Gemini API key: %s", "SET" if os.getenv("GEMINI_API_KEY") else "NOT SET"
+)
 
 # ──────────────────────────────────────────────
 # Security
 # ──────────────────────────────────────────────
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-me-in-production")
-DEBUG = os.environ.get("DEBUG", "True") == "True"
+_default_key = "django-insecure-local-dev-only-" + "x" * 20
+SECRET_KEY = os.environ.get("SECRET_KEY", _default_key)
+if not os.environ.get("SECRET_KEY") and not os.environ.get("DEBUG"):
+    raise RuntimeError(
+        "SECRET_KEY env variable is required in production. "
+        "Set DEBUG=True explicitly for local development."
+    )
+DEBUG = os.environ.get("DEBUG", "False") == "True"
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 # ──────────────────────────────────────────────
@@ -101,15 +111,22 @@ else:
 # ──────────────────────────────────────────────
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
+if os.environ.get("REDIS_URL"):
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        }
+    }
 
 # ──────────────────────────────────────────────
 # Celery
@@ -136,9 +153,12 @@ REST_FRAMEWORK = {
 # CORS
 # ──────────────────────────────────────────────
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
-# CORS_REPLACE_HTTPS_REFERER = True
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+).split(",")
 
 # ──────────────────────────────────────────────
 # Auth
