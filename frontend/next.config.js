@@ -14,6 +14,7 @@ const nextConfig = {
       // Generic CDN fallback for other listing sources (can be tightened per integration)
       { protocol: "https", hostname: "*.amazonaws.com" },
       { protocol: "https", hostname: "*.cloudfront.net" },
+      { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
 };

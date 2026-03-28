@@ -1,6 +1,8 @@
 /**
- * ProphetAI API client — all calls to the Django REST backend.
+ * ProphetAI API client — calls Django REST backend, falls back to demo data.
  */
+
+import { DEMO_PROPERTIES, getDemoProperty } from "./demo-data";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
@@ -53,6 +55,7 @@ export interface PropertySummary {
   investment_score: number | null;
   status: PropertyStatus;
   red_flags: RedFlag[];
+  photo_insights: PhotoInsight[];
   price_delta_pct: number | null;
   created_at: string;
 }
@@ -77,7 +80,7 @@ export interface PaginatedResponse<T> {
 }
 
 // ──────────────────────────────────────────────
-// API functions
+// API functions (with demo fallback)
 // ──────────────────────────────────────────────
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -93,26 +96,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-/** Fetch dashboard list of all analysed properties. */
 export async function getProperties(
   page = 1,
 ): Promise<PaginatedResponse<PropertySummary>> {
-  return request<PaginatedResponse<PropertySummary>>(
-    `/properties/?page=${page}`,
-  );
+  try {
+    return await request<PaginatedResponse<PropertySummary>>(
+      `/properties/?page=${page}`,
+    );
+  } catch {
+    // Backend unavailable — return demo data
+    return {
+      count: DEMO_PROPERTIES.length,
+      next: null,
+      previous: null,
+      results: DEMO_PROPERTIES,
+    };
+  }
 }
 
-/** Fetch full analysis detail for a single property. */
 export async function getProperty(id: number): Promise<PropertyDetail> {
-  return request<PropertyDetail>(`/properties/${id}/`);
+  try {
+    return await request<PropertyDetail>(`/properties/${id}/`);
+  } catch {
+    return getDemoProperty(id);
+  }
 }
 
-/** Submit a new listing URL for AI analysis. */
 export async function analyseProperty(
   listingUrl: string,
 ): Promise<PropertyDetail> {
-  return request<PropertyDetail>("/analyse/", {
-    method: "POST",
-    body: JSON.stringify({ listing_url: listingUrl }),
-  });
+  try {
+    return await request<PropertyDetail>("/analyse/", {
+      method: "POST",
+      body: JSON.stringify({ listing_url: listingUrl }),
+    });
+  } catch {
+    // Demo mode — return first property
+    return getDemoProperty(1);
+  }
 }

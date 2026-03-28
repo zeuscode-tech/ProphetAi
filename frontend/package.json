@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "cross-env NODE_OPTIONS=--max_old_space_size=4096 next dev",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "clsx": "^2.1.0",
-    "lucide-react": "^1.6.0",
+    "lucide-react": "^1.7.0",
     "next": "15.3.9",
     "react": "^19",
     "react-dom": "^19",
@@ -21,7 +21,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.0.1",
-    "cross-env": "^10.1.0",
     "eslint": "^8",
     "eslint-config-next": "15.3.9",
     "postcss": "^8",

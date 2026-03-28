@@ -3,19 +3,30 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getProperty, type PropertyDetail } from "@/lib/api";
-import PriceChart from "@/components/PriceChart";
+import MarketPosition from "@/components/MarketPosition";
 import RedFlagCard from "@/components/RedFlagCard";
 import PhotoInsightCard from "@/components/PhotoInsightCard";
 import InvestmentScoreGauge from "@/components/InvestmentScoreGauge";
+import {
+  ArrowLeft, Bed, Bath, Maximize, Calendar, ExternalLink,
+  TrendingUp, Percent, AlertTriangle, ChevronLeft, ChevronRight,
+  X, Images,
+} from "lucide-react";
 
 function fmt(n: number | null | undefined, opts?: Intl.NumberFormatOptions) {
-  if (n == null) return "—";
+  if (n == null) return "\u2014";
   return new Intl.NumberFormat("en-US", opts).format(n);
 }
-
 function fmtUSD(n: number | null | undefined) {
   return fmt(n, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
+
+const STATUS: Record<string, string> = {
+  completed: "bg-neon-cyan/10 text-neon-cyan",
+  processing: "bg-neon-blue/10 text-neon-blue",
+  failed: "bg-neon-pink/10 text-neon-pink",
+  pending: "bg-surface-200 text-slate-400",
+};
 
 export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +34,7 @@ export default function AnalysisPage() {
   const [property, setProperty] = useState<PropertyDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -32,208 +44,179 @@ export default function AnalysisPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const photos: string[] = [];
+  if (property) {
+    property.photos?.forEach((p) => { if (p.url) photos.push(p.url); });
+    property.photo_insights?.forEach((p) => { if (p.photo_url && !photos.includes(p.photo_url)) photos.push(p.photo_url); });
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-slate-400">
-          <svg className="h-10 w-10 animate-spin text-brand-500" viewBox="0 0 24 24" fill="none">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <svg className="h-8 w-8 animate-spin text-neon-cyan" viewBox="0 0 24 24" fill="none">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
           </svg>
-          <p className="text-sm">Загрузка анализа…</p>
+          <p className="text-sm">Loading analysis...</p>
         </div>
       </div>
     );
   }
 
   if (error || !property) {
-    return (
-      <div className="rounded-xl border border-red-800 bg-red-950/30 p-6 text-red-400">
-        {error ?? "Объект не найден."}
-      </div>
-    );
+    return <div className="glass rounded-2xl p-6 text-neon-pink">{error ?? "Property not found."}</div>;
   }
 
   const delta = property.price_delta_pct;
-  const deltaPositive = delta !== null && delta > 0;
+  const deltaPos = delta !== null && delta > 0;
 
   return (
-    <div className="space-y-8">
-      {/* Back */}
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-300 transition-colors"
-      >
-        ← Назад
+    <div className="space-y-6 animate-fade-in">
+      {/* Lightbox */}
+      {lightbox !== null && photos.length > 0 && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center" onClick={() => setLightbox(null)}>
+          <button className="absolute top-5 right-5 text-slate-500 hover:text-white cursor-pointer" onClick={() => setLightbox(null)}><X className="h-6 w-6" /></button>
+          <button className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setLightbox((i) => (i! > 0 ? i! - 1 : photos.length - 1)); }}>
+            <ChevronLeft className="h-8 w-8" />
+          </button>
+          <button className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); setLightbox((i) => (i! < photos.length - 1 ? i! + 1 : 0)); }}>
+            <ChevronRight className="h-8 w-8" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={photos[lightbox]} alt="" className="max-h-[85vh] max-w-[92vw] rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
+          <p className="absolute bottom-5 text-sm text-slate-600">{lightbox + 1} / {photos.length}</p>
+        </div>
+      )}
+
+      <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-neon-cyan transition cursor-pointer">
+        <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
-      {/* Property header */}
-      <div className="gradient-border rounded-2xl bg-slate-900/60 p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-50">
-              {property.address || "Адрес недоступен"}
-            </h1>
-            <p className="mt-0.5 text-slate-400">
-              {[property.city, property.state, property.zip_code].filter(Boolean).join(", ")}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-300">
-              {property.bedrooms != null && <span>🛏 {property.bedrooms} комн.</span>}
-              {property.bathrooms != null && <span>🚿 {property.bathrooms} сануз.</span>}
-              {property.square_feet != null && (
-                <span>📐 {fmt(property.square_feet)} м²</span>
-              )}
-              {property.year_built != null && <span>🗓 Год постройки {property.year_built}</span>}
+      {/* Photo Gallery */}
+      {photos.length > 0 && (
+        <div className="grid gap-2 rounded-2xl overflow-hidden" style={{
+          gridTemplateColumns: photos.length === 1 ? "1fr" : "3fr 1fr",
+          gridTemplateRows: photos.length <= 2 ? "320px" : "160px 160px",
+        }}>
+          <div className={`relative overflow-hidden cursor-pointer group ${photos.length > 2 ? "row-span-2" : ""}`} onClick={() => setLightbox(0)}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={photos[0]} alt="" className="h-full w-full object-cover group-hover:scale-[1.03] transition-transform duration-700" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1.5 text-xs text-white font-medium">
+              <Images className="h-3.5 w-3.5" /> {photos.length} photos
             </div>
           </div>
+          {photos.slice(1, photos.length > 2 ? 3 : 2).map((url, i) => (
+            <div key={i} className="relative overflow-hidden cursor-pointer group" onClick={() => setLightbox(i + 1)}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="h-full w-full object-cover group-hover:scale-[1.03] transition-transform duration-700" />
+              {i === (photos.length > 2 ? 1 : 0) && photos.length > 3 && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                  <span className="text-white font-semibold">+{photos.length - 3} more</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
-          {/* Status badge */}
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${
-              property.status === "completed"
-                ? "bg-green-900/40 text-green-400"
-                : property.status === "processing"
-                ? "bg-yellow-900/40 text-yellow-400"
-                : property.status === "failed"
-                ? "bg-red-900/40 text-red-400"
-                : "bg-slate-800 text-slate-400"
-            }`}
-          >
-            {property.status}
-          </span>
+      {/* Header */}
+      <div className="glass rounded-2xl p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white">{property.address || "Address unavailable"}</h1>
+            <p className="mt-0.5 text-slate-400">{[property.city, property.state, property.zip_code].filter(Boolean).join(", ")}</p>
+            <div className="mt-3 flex flex-wrap gap-4 text-sm text-slate-400">
+              {property.bedrooms != null && <span className="flex items-center gap-1.5"><Bed className="h-4 w-4 text-slate-500" />{property.bedrooms} beds</span>}
+              {property.bathrooms != null && <span className="flex items-center gap-1.5"><Bath className="h-4 w-4 text-slate-500" />{property.bathrooms} baths</span>}
+              {property.square_feet != null && <span className="flex items-center gap-1.5"><Maximize className="h-4 w-4 text-slate-500" />{fmt(property.square_feet)} sqft</span>}
+              {property.year_built != null && <span className="flex items-center gap-1.5"><Calendar className="h-4 w-4 text-slate-500" />Built {property.year_built}</span>}
+            </div>
+          </div>
+          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium capitalize ${STATUS[property.status] ?? STATUS.pending}`}>{property.status}</span>
         </div>
 
-        {/* Price row */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+        <div className="mt-6 grid gap-4 sm:grid-cols-3 border-t border-glass-border pt-6">
           <div>
-            <p className="text-xs uppercase tracking-widest text-slate-500">Цена объявления</p>
-            <p className="mt-1 text-2xl font-bold text-slate-100">
-              {fmtUSD(property.listing_price)}
-            </p>
+            <p className="text-xs text-slate-500">Listing Price</p>
+            <p className="mt-1 text-2xl font-bold text-white">{fmtUSD(property.listing_price)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-widest text-slate-500">Оценка AI</p>
-            <p className="mt-1 text-2xl font-bold text-brand-400">
-              {fmtUSD(property.ai_estimated_price)}
-            </p>
+            <p className="text-xs text-slate-500">Estimated Value</p>
+            <p className="mt-1 text-2xl font-bold text-neon-cyan">{fmtUSD(property.ai_estimated_price)}</p>
           </div>
           <div>
-            <p className="text-xs uppercase tracking-widest text-slate-500">Разница цены</p>
-            <p
-              className={`mt-1 text-2xl font-bold ${
-                delta == null
-                  ? "text-slate-400"
-                  : deltaPositive
-                  ? "text-green-400"
-                  : "text-red-400"
-              }`}
-            >
-              {delta == null
-                ? "—"
-                : `${deltaPositive ? "+" : ""}${delta.toFixed(1)}%`}
+            <p className="text-xs text-slate-500">Price Difference</p>
+            <p className={`mt-1 text-2xl font-bold ${delta == null ? "text-slate-500" : deltaPos ? "text-neon-cyan" : "text-neon-pink"}`}>
+              {delta == null ? "\u2014" : `${deltaPos ? "+" : ""}${delta.toFixed(1)}%`}
             </p>
-            <p className="text-xs text-slate-500">
-              {delta == null
-                ? ""
-                : deltaPositive
-                ? "Ниже рынка"
-                : "Выше рынка"}}
-            </p>
+            {delta != null && <p className="text-xs text-slate-500">{deltaPos ? "Below estimated value" : "Above estimated value"}</p>}
           </div>
         </div>
       </div>
 
-      {/* Investment Score + Metrics row */}
+      {/* Metrics */}
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="sm:col-span-1 gradient-border rounded-2xl bg-slate-900/60 p-5 flex flex-col items-center justify-center">
-          <p className="mb-3 text-xs uppercase tracking-widest text-slate-500">Инвест. рейтинг</p>
+        <div className="sm:col-span-1 glass rounded-2xl p-5 flex flex-col items-center justify-center">
+          <p className="mb-3 text-xs text-slate-500">Investment Score</p>
           <InvestmentScoreGauge score={property.investment_score} />
         </div>
         {[
-          {
-            label: "Доходность аренды",
-            value: typeof property.rental_yield_pct === 'number' ? `${property.rental_yield_pct.toFixed(1)}%` : "—",
-            sub: "Ожидаемая годовая доходность",
-          },
-          {
-            label: "Тренд роста цен",
-            value: typeof property.appreciation_trend_pct === 'number' ? `${property.appreciation_trend_pct.toFixed(1)}%` : "—",
-            sub: "Средний рост за 12 мес.",
-          },
-          {
-            label: "Красные флаги",
-            value: property.red_flags?.length ?? 0,
-            sub: "Проблемы, обнаруженные AI",
-          },
+          { icon: Percent, label: "Rental Yield", value: typeof property.rental_yield_pct === "number" ? `${property.rental_yield_pct.toFixed(1)}%` : "\u2014", sub: "Estimated gross annual", color: "text-neon-cyan" },
+          { icon: TrendingUp, label: "Appreciation", value: typeof property.appreciation_trend_pct === "number" ? `${property.appreciation_trend_pct.toFixed(1)}%` : "\u2014", sub: "12-month area average", color: "text-neon-purple" },
+          { icon: AlertTriangle, label: "Red Flags", value: String(property.red_flags?.length ?? 0), sub: "Issues detected", color: "text-neon-pink" },
         ].map((m) => (
-          <div key={m.label} className="gradient-border rounded-2xl bg-slate-900/60 p-5">
-            <p className="text-xs uppercase tracking-widest text-slate-500">{m.label}</p>
-            <p className="mt-1 text-3xl font-bold text-slate-100">{m.value}</p>
+          <div key={m.label} className="glass rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-1"><m.icon className={`h-4 w-4 ${m.color}`} /><p className="text-xs text-slate-500">{m.label}</p></div>
+            <p className="mt-1 text-2xl font-bold text-white">{m.value}</p>
             <p className="mt-1 text-xs text-slate-500">{m.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Comparable sales */}
-      {property.comparable_sales && property.comparable_sales.length > 0 ? (
-        <div className="gradient-border rounded-2xl bg-slate-900/60 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-slate-100">
-            Похожие объекты в районе
-          </h2>
-          <PriceChart
-            property={property}
-            comparables={property.comparable_sales}
-          />
-        </div>
-      ) : (
-        <div className="gradient-border rounded-2xl bg-slate-900/60 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-slate-100">
-            Похожие объекты в районе
-          </h2>
-          <p className="text-sm text-slate-500">
-            Нет точных совпадений в данном микрорайоне. Данные появятся по мере пополнения базы.
-          </p>
+      {/* Market Position */}
+      {property.comparable_sales && property.comparable_sales.length > 0 && (
+        <div className="glass rounded-2xl p-6">
+          <h2 className="mb-4 text-lg font-semibold text-white">Market Position</h2>
+          <MarketPosition property={property} comparables={property.comparable_sales} />
         </div>
       )}
 
-      {/* Red flags */}
+      {/* Red Flags */}
       {property.red_flags && property.red_flags.length > 0 && (
         <div>
-          <h2 className="mb-4 text-lg font-semibold text-slate-100">
-            ⚠️ Красные флаги ({property.red_flags.length})
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+            <AlertTriangle className="h-5 w-5 text-neon-pink" /> Red Flags ({property.red_flags.length})
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {property.red_flags.map((flag, i) => (
-              <RedFlagCard key={i} flag={flag} />
-            ))}
+            {property.red_flags.map((flag, i) => <RedFlagCard key={i} flag={flag} />)}
           </div>
         </div>
       )}
 
-      {/* Photo insights */}
+      {/* Photo Analysis */}
       {property.photo_insights && property.photo_insights.length > 0 && (
         <div>
-          <h2 className="mb-4 text-lg font-semibold text-slate-100">
-            🖼️ Анализ фотографий
-          </h2>
+          <h2 className="mb-4 text-lg font-semibold text-white">Photo Analysis</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {property.photo_insights.map((insight, i) => (
-              <PhotoInsightCard key={i} insight={insight} />
+              <PhotoInsightCard key={i} insight={insight} onPhotoClick={() => {
+                const idx = photos.indexOf(insight.photo_url);
+                if (idx !== -1) setLightbox(idx);
+              }} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Listing URL */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-500">
-        <span className="font-medium text-slate-400">Источник: </span>
-        <a
-          href={property.listing_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="break-all text-brand-400 hover:underline"
-        >
-          {property.listing_url}
+      {/* Source */}
+      <div className="glass rounded-2xl p-4 text-sm text-slate-500">
+        <span className="text-slate-400">Source: </span>
+        <a href={property.listing_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-neon-cyan hover:underline break-all cursor-pointer">
+          {property.listing_url} <ExternalLink className="h-3 w-3 shrink-0" />
         </a>
       </div>
     </div>

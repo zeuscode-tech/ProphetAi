@@ -14,7 +14,7 @@ class Property(models.Model):
 
     # Listing metadata
     listing_url = models.URLField(unique=True, max_length=2048)
-    address = models.CharField(max_length=512, blank=True)
+    address = models.CharField(max_length=512, blank=True, default="")
     city = models.CharField(max_length=128, blank=True)
     state = models.CharField(max_length=64, blank=True)
     zip_code = models.CharField(max_length=20, blank=True, null=True)
