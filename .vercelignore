@@ -1,0 +1,12 @@
+backend/
+venv/
+core/
+manage.py
+requirements.txt
+requirements*.txt
+db.sqlite3
+docker-compose.yml
+*.py
+*.pyc
+__pycache__/
+.env

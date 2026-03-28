@@ -12,7 +12,13 @@ const nextConfig = {
       { protocol: "https", hostname: "*.zillowstatic.com" },
       { protocol: "https", hostname: "ap.rdcpix.com" },
       { protocol: "https", hostname: "photos.zillowstatic.com" },
-      // Generic CDN fallback for other listing sources (can be tightened per integration)
+      // house.kg / lalafo.kg CDNs
+      { protocol: "https", hostname: "cdn.house.kg" },
+      { protocol: "https", hostname: "img.house.kg" },
+      { protocol: "https", hostname: "images.house.kg" },
+      { protocol: "https", hostname: "*.house.kg" },
+      { protocol: "https", hostname: "*.lalafo.kg" },
+      // Generic CDN fallback for other listing sources
       { protocol: "https", hostname: "*.amazonaws.com" },
       { protocol: "https", hostname: "*.cloudfront.net" },
       { protocol: "https", hostname: "images.unsplash.com" },
