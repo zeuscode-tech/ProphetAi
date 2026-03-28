@@ -14,10 +14,10 @@ class Property(models.Model):
 
     # Listing metadata
     listing_url = models.URLField(unique=True, max_length=2048)
-    address = models.CharField(max_length=512, blank=True)
+    address = models.CharField(max_length=512, blank=True, default="")
     city = models.CharField(max_length=128, blank=True)
     state = models.CharField(max_length=64, blank=True)
-    zip_code = models.CharField(max_length=20, blank=True)
+    zip_code = models.CharField(max_length=20, blank=True, null=True)
 
     # Property features
     bedrooms = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -40,6 +40,12 @@ class Property(models.Model):
         max_digits=5, decimal_places=2, null=True, blank=True
     )
 
+    # Raw listing data from scraper
+    listing_params = models.JSONField(default=dict, blank=True)  # All key-value params from the listing
+    phone_number = models.CharField(max_length=64, blank=True, default="")
+    map_lat = models.FloatField(null=True, blank=True)
+    map_lng = models.FloatField(null=True, blank=True)
+
     # JSON fields for rich AI output
     red_flags = models.JSONField(default=list, blank=True)
     photo_insights = models.JSONField(default=list, blank=True)
@@ -61,10 +67,15 @@ class Property(models.Model):
 
     @property
     def price_delta_pct(self) -> float | None:
-        """Percentage difference between listing price and AI estimate."""
-        if self.listing_price and self.ai_estimated_price and self.listing_price > 0:
+        """
+        Overpricing percentage: positive = listing is above market (bad for buyer),
+        negative = listing is below market (good deal).
+        Formula: (listing - estimate) / estimate * 100
+        Example: $550k listing / $292k estimate → +88.2% (переплата)
+        """
+        if self.listing_price and self.ai_estimated_price and self.ai_estimated_price > 0:
             return float(
-                (self.ai_estimated_price - self.listing_price) / self.listing_price * 100
+                (self.listing_price - self.ai_estimated_price) / self.ai_estimated_price * 100
             )
         return None
 

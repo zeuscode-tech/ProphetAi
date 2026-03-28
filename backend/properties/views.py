@@ -1,5 +1,6 @@
 """API views for the properties app."""
 
+import logging
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -11,27 +12,38 @@ from services.pricing_service import PricingService
 from .models import Property
 from .serializers import (
     AnalyseURLSerializer,
+    ProphetAIResponseSerializer,
     PropertyDetailSerializer,
     PropertyListSerializer,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class PropertyListView(generics.ListAPIView):
-    """GET /api/properties/ — dashboard list of all analysed properties."""
-
-    queryset = Property.objects.all()
+    """GET /api/properties/ — список всех проанализированных объектов."""
+    queryset = Property.objects.all().order_by("-created_at")
     serializer_class = PropertyListSerializer
 
 
 class PropertyDetailView(generics.RetrieveAPIView):
-    """GET /api/properties/<pk>/ — full analysis detail for one property."""
-
+    """GET /api/properties/<pk>/ — полная информация по одному объекту."""
     queryset = Property.objects.prefetch_related("photos")
     serializer_class = PropertyDetailSerializer
 
 
 class AnalysePropertyView(APIView):
-    """POST /api/analyse/ — submit a listing URL for AI analysis."""
+    """
+    POST /api/analyse/
+    Body: {"listing_url": "https://house.kg/..."}
+
+    Returns the strict ProphetAI JSON:
+    {
+        "property_title", "ai_estimate", "price_delta_percent",
+        "investment_score", "condition", "red_flags",
+        "comparable_sales", "images"
+    }
+    """
 
     def post(self, request):
         serializer = AnalyseURLSerializer(data=request.data)
@@ -39,69 +51,183 @@ class AnalysePropertyView(APIView):
 
         listing_url = serializer.validated_data["listing_url"]
 
-        # Return existing record if already analysed
-        existing = Property.objects.filter(listing_url=listing_url).first()
-        if existing and existing.status == Property.StatusChoices.COMPLETED:
-            return Response(
-                PropertyDetailSerializer(existing).data, status=status.HTTP_200_OK
-            )
-
-        # Create or reset the property record
         prop, _ = Property.objects.get_or_create(listing_url=listing_url)
         prop.status = Property.StatusChoices.PROCESSING
         prop.save(update_fields=["status"])
 
         try:
-            # 1. Gemini: analyse listing page and photos
+            # ── Step 1: Gemini multimodal analysis ───────────────────────────
             gemini_svc = GeminiService()
             gemini_result = gemini_svc.analyse_listing(listing_url)
 
-            # Persist extracted fields
-            prop.address = gemini_result.get("address", "")
-            prop.city = gemini_result.get("city", "")
-            prop.state = gemini_result.get("state", "")
-            prop.zip_code = gemini_result.get("zip_code", "")
-            prop.bedrooms = gemini_result.get("bedrooms")
-            prop.bathrooms = gemini_result.get("bathrooms")
-            prop.square_feet = gemini_result.get("square_feet")
+            if not gemini_result or "error" in gemini_result:
+                raise ValueError(f"Gemini error: {gemini_result.get('error', 'Unknown')}")
+
+            # ── Step 2: Map Gemini fields → model ────────────────────────────
+            prop.address      = gemini_result.get("address", "")
+            prop.city         = gemini_result.get("city", "Бишкек")
+            prop.state        = gemini_result.get("state", "Чуйская область")
+            prop.zip_code     = gemini_result.get("zip_code", "")
+            prop.bedrooms     = gemini_result.get("bedrooms")
+            prop.bathrooms    = gemini_result.get("bathrooms")
+            prop.square_feet  = gemini_result.get("square_feet")
             prop.lot_size_sqft = gemini_result.get("lot_size_sqft")
-            prop.year_built = gemini_result.get("year_built")
+            prop.year_built   = gemini_result.get("year_built")
             prop.listing_price = gemini_result.get("listing_price")
-            prop.red_flags = gemini_result.get("red_flags", [])
-            prop.photo_insights = gemini_result.get("photo_insights", [])
+
+            # Save raw listing data from scraper
+            scraped = gemini_svc.last_scraped
+            prop.listing_params = scraped.get("params", {})
+            if scraped.get("phone_number"):
+                prop.phone_number = scraped["phone_number"]
+            if scraped.get("map_lat") and scraped.get("map_lng"):
+                prop.map_lat = scraped["map_lat"]
+                prop.map_lng = scraped["map_lng"]
+
+            condition_block = gemini_result.get("condition_analysis", {})
+            prop.red_flags    = condition_block.get("red_flags", [])
+
+            # ── Photo insights: deduplicate by room_type, attach real photo URLs ─
+            raw_insights = gemini_result.get("photo_insights", [])
+            photo_urls = scraped.get("photo_urls", [])
+            seen_rooms: set[str] = set()
+            unique_insights = []
+            for ins in raw_insights:
+                if not isinstance(ins, dict):
+                    continue
+                rt = (ins.get("room_type") or "Общий вид").strip()
+                if rt in seen_rooms:
+                    continue
+                seen_rooms.add(rt)
+                # Attach a real photo URL by position
+                idx = len(unique_insights)
+                ins["photo_url"] = photo_urls[idx] if idx < len(photo_urls) else ""
+                unique_insights.append(ins)
+
+            prop.photo_insights = unique_insights
             prop.gemini_raw_response = gemini_result
 
-            # 2. Pricing model: estimate fair-market value
-            pricing_svc = PricingService()
-            pricing_result = pricing_svc.predict(
-                bedrooms=prop.bedrooms,
-                bathrooms=float(prop.bathrooms) if prop.bathrooms else None,
-                square_feet=prop.square_feet,
-                lot_size_sqft=prop.lot_size_sqft,
-                year_built=prop.year_built,
-                city=prop.city,
-                state=prop.state,
-                zip_code=prop.zip_code,
-            )
+            # Gemini investment potential (fallback if PricingService fails)
+            gemini_inv = gemini_result.get("investment_potential", {})
 
-            prop.ai_estimated_price = pricing_result.get("estimated_price")
-            prop.investment_score = pricing_result.get("investment_score")
-            prop.rental_yield_pct = pricing_result.get("rental_yield_pct")
-            prop.appreciation_trend_pct = pricing_result.get("appreciation_trend_pct")
-            prop.comparable_sales = pricing_result.get("comparable_sales", [])
+            # ── Step 3: PricingService (KG heuristic / XGBoost) ──────────────
+            try:
+                pricing_svc = PricingService()
+                gemini_valuation = gemini_result.get("valuation", {})
+                gemini_est = gemini_valuation.get("estimated_price")
+                try:
+                    gemini_est = float(gemini_est) if gemini_est else None
+                except (ValueError, TypeError):
+                    gemini_est = None
 
-            prop.status = Property.StatusChoices.COMPLETED
+                pricing_result = pricing_svc.predict(
+                    bedrooms               = prop.bedrooms,
+                    bathrooms              = float(prop.bathrooms) if prop.bathrooms else None,
+                    square_feet            = prop.square_feet,
+                    lot_size_sqft          = prop.lot_size_sqft,
+                    year_built             = prop.year_built,
+                    city                   = prop.city,
+                    state                  = prop.state,
+                    zip_code               = prop.zip_code,
+                    condition              = gemini_result.get("condition", ""),
+                    listing_price          = float(prop.listing_price) if prop.listing_price else None,
+                    listing_url            = listing_url,
+                    property_type          = gemini_result.get("property_type", ""),
+                    address                = prop.address,
+                    gemini_estimated_price = gemini_est,
+                )
+
+                prop.ai_estimated_price    = pricing_result["estimated_price"]
+                prop.investment_score      = pricing_result["investment_score"]
+                prop.rental_yield_pct      = pricing_result["rental_yield_pct"]
+                prop.appreciation_trend_pct = pricing_result["appreciation_trend_pct"]
+                prop.comparable_sales      = pricing_result["comparable_sales"]
+
+            except Exception as pricing_err:
+                logger.warning("PricingService failed: %s", pricing_err)
+                # Fallback to Gemini's own estimates
+                prop.ai_estimated_price = gemini_result.get("valuation", {}).get("estimated_price")
+                prop.investment_score   = gemini_inv.get("score")
+
+            # ── Step 4: Ensure no blanks — fallback defaults ─────────────────
+            if not prop.rental_yield_pct and prop.ai_estimated_price:
+                est = float(prop.ai_estimated_price)
+                market = float(prop.listing_price or est)
+                if market > 0:
+                    city_lower = (prop.city or "").lower()
+                    # District-aware monthly rent coefficients (% of property value)
+                    # Central areas: lower yield but higher liquidity
+                    # Suburban areas: higher yield but lower demand
+                    if any(k in city_lower for k in ("центр", "center", "филармония")):
+                        monthly_coeff = 0.004   # ~4.8% annual
+                    elif any(k in city_lower for k in ("бишкек", "bishkek")):
+                        monthly_coeff = 0.0055  # ~6.6% annual
+                    elif any(k in city_lower for k in ("ош", "osh")):
+                        monthly_coeff = 0.006   # ~7.2% annual
+                    else:
+                        monthly_coeff = 0.007   # ~8.4% annual (smaller cities/suburbs)
+                    prop.rental_yield_pct = round(
+                        (est * monthly_coeff * 12) / market * 100, 1
+                    )
+
+            if not prop.appreciation_trend_pct:
+                city_lower = (prop.city or "").lower()
+                # Use city-level estimates; exact match to avoid substring false positives
+                if city_lower.strip() in ("бишкек", "bishkek"):
+                    prop.appreciation_trend_pct = 9.5
+                elif city_lower.strip() in ("ош", "osh"):
+                    prop.appreciation_trend_pct = 5.0
+                elif city_lower.strip() in ("джалал-абад", "jalal-abad", "каракол", "karakol"):
+                    prop.appreciation_trend_pct = 4.8
+                else:
+                    prop.appreciation_trend_pct = 4.2
+
+            # ── Step 5: Inject overpricing red flag if price delta is significant ─
+            if prop.listing_price and prop.ai_estimated_price:
+                listing_p = float(prop.listing_price)
+                estimated_p = float(prop.ai_estimated_price)
+                if estimated_p > 0:
+                    overprice_pct = (listing_p - estimated_p) / estimated_p * 100
+                    existing_issues = {f.get("issue", "").lower() for f in prop.red_flags if isinstance(f, dict)}
+                    if overprice_pct >= 30 and not any("переплат" in i or "overpriced" in i for i in existing_issues):
+                        prop.red_flags = list(prop.red_flags) + [{
+                            "issue": "Значительная переплата",
+                            "severity": "high",
+                            "description": (
+                                f"Запрашиваемая цена на {overprice_pct:.0f}% выше рыночной оценки ProphetAI "
+                                f"(${estimated_p:,.0f}). Это снижает инвестиционную привлекательность "
+                                f"и потенциал перепродажи."
+                            ),
+                        }]
+                    elif 15 <= overprice_pct < 30 and not any("переплат" in i or "overpriced" in i for i in existing_issues):
+                        prop.red_flags = list(prop.red_flags) + [{
+                            "issue": "Умеренная переплата",
+                            "severity": "medium",
+                            "description": (
+                                f"Цена на {overprice_pct:.0f}% выше оценки ProphetAI. "
+                                f"Рекомендуется переговорить о скидке перед покупкой."
+                            ),
+                        }]
+
+            prop.status      = Property.StatusChoices.COMPLETED
             prop.analysed_at = timezone.now()
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.error("Analysis failed for %s: %s", listing_url, exc)
             prop.status = Property.StatusChoices.FAILED
             prop.gemini_raw_response = {"error": str(exc)}
 
         prop.save()
 
-        response_status = (
-            status.HTTP_200_OK
-            if prop.status == Property.StatusChoices.COMPLETED
-            else status.HTTP_422_UNPROCESSABLE_ENTITY
+        if prop.status == Property.StatusChoices.COMPLETED:
+            http_status = status.HTTP_200_OK
+        elif prop.status == Property.StatusChoices.FAILED:
+            http_status = status.HTTP_422_UNPROCESSABLE_ENTITY
+        else:
+            # PROCESSING / PENDING — analysis in progress
+            http_status = status.HTTP_202_ACCEPTED
+
+        return Response(
+            PropertyDetailSerializer(prop).data,
+            status=http_status,
         )
-        return Response(PropertyDetailSerializer(prop).data, status=response_status)

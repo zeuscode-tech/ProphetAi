@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: false,
   images: {
     // Restrict to common real estate listing and CDN domains.
     // Add more patterns as needed when integrating additional listing sources.
@@ -14,6 +15,7 @@ const nextConfig = {
       // Generic CDN fallback for other listing sources (can be tightened per integration)
       { protocol: "https", hostname: "*.amazonaws.com" },
       { protocol: "https", hostname: "*.cloudfront.net" },
+      { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
 };

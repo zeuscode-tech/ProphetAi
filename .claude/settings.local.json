@@ -1,10 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker compose:*)",
-      "Bash(npm --version)",
-      "Bash(python -m venv .venv)",
-      "Bash(.venv/Scripts/pip install:*)"
+      "Bash(npx tsc:*)"
     ]
   }
 }
