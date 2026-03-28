@@ -40,7 +40,7 @@ export default function LandingPage() {
       </div>
 
       <div className="animate-slide-up mb-10 max-w-3xl text-center">
-        <h1 className="text-5xl font-black tracking-tight text-white sm:text-7xl leading-[1.1]">
+        <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-7xl leading-[1.1]">
           Узнайте реальную{" "}
           <span className="text-gradient">стоимость объекта</span>
         </h1>
@@ -85,13 +85,13 @@ export default function LandingPage() {
         <p className="mt-4 glass rounded-xl border-neon-pink/30 px-4 py-3 text-sm text-neon-pink animate-fade-in">{error}</p>
       )}
 
-      <div className="mt-24 grid w-full gap-5 sm:grid-cols-3">
+      <div className="mt-12 sm:mt-20 grid w-full gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-3">
         {[
           { icon: TrendingUp, title: "Рыночная стоимость", desc: "ИИ определяет справедливую рыночную цену с доверительными интервалами на основе данных о сопоставимых продажах.", color: "text-neon-cyan", glow: "group-hover:shadow-glow" },
           { icon: BarChart3, title: "Инвест. рейтинг", desc: "Оценка 0–100 с учётом арендной доходности, тенденций роста стоимости и сравнений по району.", color: "text-neon-purple", glow: "group-hover:shadow-glow-purple" },
           { icon: Shield, title: "Отчёт о состоянии", desc: "Анализ фотографий выявляет конструктивные дефекты, следы протечек и оценивает стоимость ремонта.", color: "text-neon-blue", glow: "group-hover:shadow-glow-blue" },
         ].map((f, i) => (
-          <div key={f.title} className={`group glass-hover rounded-2xl p-6 ${f.glow} animate-slide-up cursor-default`} style={{ animationDelay: `${0.2 + i * 0.1}s` }}>
+          <div key={f.title} className={`group glass-hover rounded-2xl p-5 sm:p-6 ${f.glow} animate-slide-up cursor-default`} style={{ animationDelay: `${0.2 + i * 0.1}s` }}>
             <div className={`mb-4 ${f.color}`}><f.icon className="h-6 w-6" /></div>
             <h3 className="mb-2 text-lg font-semibold text-white">{f.title}</h3>
             <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>

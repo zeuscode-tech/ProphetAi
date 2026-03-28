@@ -141,7 +141,7 @@ export default function AnalysisPage() {
           <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium capitalize ${STATUS[property.status] ?? STATUS.pending}`}>{property.status}</span>
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-3 border-t border-glass-border pt-6">
+        <div className="mt-6 grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3 border-t border-glass-border pt-6">
           <div>
             <p className="text-xs text-slate-500">Цена объявления</p>
             <p className="mt-1 text-2xl font-bold text-white">{fmtUSD(property.listing_price)}</p>
@@ -165,8 +165,8 @@ export default function AnalysisPage() {
       </div>
 
       {/* Metrics */}
-      <div className="grid gap-4 sm:grid-cols-4">
-        <div className="sm:col-span-1 glass rounded-2xl p-5 flex flex-col items-center justify-center">
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-4">
+        <div className="col-span-2 sm:col-span-1 glass rounded-2xl p-5 flex flex-col items-center justify-center">
           <p className="mb-3 text-xs text-slate-500">Инв. рейтинг</p>
           <InvestmentScoreGauge score={property.investment_score} />
         </div>
