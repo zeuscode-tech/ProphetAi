@@ -2,9 +2,8 @@
 
 > **Instant AI-powered property valuations and "Red Flag" detection — paste a listing URL, get insights in seconds.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
-[![Next.js 14](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org)
+[![Next.js 15](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org)
 [![Django 4.2](https://img.shields.io/badge/Django-4.2-green.svg)](https://djangoproject.com)
 
 ---
@@ -12,14 +11,14 @@
 ## ✨ MVP Features
 
 ### 🏷️ Smart Pricing Engine
-ProphetAI combines a **Scikit-learn XGBoost** regression model trained on comparable sales with **Google Gemini** multimodal analysis to produce a fair-market value estimate with confidence intervals. Users paste any publicly accessible listing URL; the backend scrapes structured data (beds, baths, sqft, lot size, location) and runs it through the model instantly.
+ProphetAI uses a **Kyrgyzstan real-estate price benchmark heuristic** and **Google Gemini** multimodal analysis to estimate a property's price. The backend can optionally use a trained model when a compatible model artifact is supplied; **no trained XGBoost artifact is included in this repository**. A supported listing URL can be processed to extract property details for analysis, subject to source-site availability and API access.
 
 ### 📊 Investment Score Dashboards
 Every analysed property gets a composite **Investment Score (0–100)** displayed on a FinTech-style dashboard with:
 - Estimated vs. listing price delta
 - Rental yield projection
-- Neighbourhood appreciation trend (12-month)
-- Comparable properties table
+- Estimated annual appreciation based on city-level assumptions
+- Comparable listings when the scraper can retrieve them
 
 ### 🖼️ AI-Vision Photo Analysis
 The platform sends property listing photos to the **Gemini Vision API** and returns structured *Photo Insight* cards highlighting:
@@ -27,6 +26,20 @@ The platform sends property listing photos to the **Gemini Vision API** and retu
 - Condition rating per room
 - "Red Flags" (water stains, structural cracks, outdated wiring panels, etc.)
 - Curb-appeal score
+
+---
+
+## 🔎 Methodology & limitations
+
+This is a hackathon MVP, not a certified valuation or structural inspection service.
+
+- **Valuation:** without an external trained model artifact, `backend/services/pricing_service.py` uses city, size, building condition, housing series, property type, and land benchmarks. When Gemini returns an estimate, the service blends it with its heuristic estimate.
+- **Interval:** the displayed `confidence_interval` is currently calculated as **estimated price ±12%** in code. It is a fixed range, **not a statistically calibrated prediction interval**.
+- **Rental yield & appreciation:** these are rules-of-thumb and city-level assumptions, not guaranteed future returns.
+- **Image-based red flags:** Gemini generates suggested observations from descriptions/photos. They require independent professional verification.
+- **Comparable listings:** the result depends on successful retrieval; it can be empty. The repository includes XGBoost as a dependency, but no checked-in model artifact or publicly documented validation metrics.
+
+See [pricing service](backend/services/pricing_service.py) and [Gemini service](backend/services/gemini_service.py) for implementation details.
 
 ---
 
@@ -39,10 +52,10 @@ ProphetAI/
 │   ├── properties/           # Core app: models, views, serializers
 │   ├── services/             # AI service modules
 │   │   ├── gemini_service.py # Google Gemini multimodal integration
-│   │   └── pricing_service.py# XGBoost price prediction engine
+│   │   └── pricing_service.py# KG price heuristic and optional model loader
 │   ├── Dockerfile
 │   └── requirements.txt
-├── frontend/                 # Next.js 14 (TypeScript + Tailwind CSS)
+├── frontend/                 # Next.js 15 (TypeScript + Tailwind CSS)
 │   ├── src/
 │   │   ├── app/              # App Router pages
 │   │   │   ├── page.tsx      # Landing / URL submission
@@ -130,9 +143,9 @@ npm run dev
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 14, TypeScript, Tailwind CSS |
-| Backend API | Django 4.2, Django REST Framework |
-| AI / ML | Google Gemini 1.5 Pro (multimodal), XGBoost |
+| Frontend | Next.js 15.3.9, React 19, TypeScript, Tailwind CSS |
+| Backend API | Django >=4.2,<5.0, Django REST Framework |
+| AI / ML | Google Gemini 2.5 Flash (multimodal), price benchmark heuristics; optional trained model support |
 | Database | PostgreSQL 15 |
 | Cache / Queue | Redis 7, Celery |
 | Containerisation | Docker, Docker Compose |
@@ -141,4 +154,4 @@ npm run dev
 
 ## 📄 License
 
-MIT © 2024 ZeusCode Tech
+This repository currently has no `LICENSE` file. Do not assume an open-source license; contact the repository owners about reuse permissions.
